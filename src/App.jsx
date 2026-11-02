@@ -8,6 +8,7 @@ import { Header } from "./components/layout/Header";
 import { BottomNav } from "./components/layout/BottomNav";
 import { SideDrawer } from "./components/layout/SideDrawer";
 import { ToastAndConfetti } from "./components/common/ToastAndConfetti";
+import { KpiCards } from "./components/today/KpiCards";
 
 // Screens
 import { AuthScreen } from "./components/auth/AuthScreen";
@@ -130,6 +131,9 @@ export function App() {
       <main className="max-w-md mx-auto px-3.5 pt-3.5">
         <Header onOpenDrawer={() => setDrawerOpen(true)} />
 
+        {/* Top 4 Clickable KPI Cards - ALWAYS VISIBLE ACROSS ALL TABS (Today, Syllabus, Tests, Profile) */}
+        <KpiCards onKpiClick={handleKpiClick} />
+
         {activeTab === "today" && (
           <TodayTab
             onOpenMultiExam={() => setMultiExamOpen(true)}
@@ -137,7 +141,6 @@ export function App() {
             onOpenQuickNotes={() => setQuickNotesOpen(true)}
             onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
             onNavigateToSyllabus={() => setActiveTab("syllabus")}
-            onKpiClick={handleKpiClick}
           />
         )}
 
