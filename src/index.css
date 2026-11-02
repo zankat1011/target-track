@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+/* SAMSUNG ONE UI 9 — MINIMAL CREAM THEME */
+html[data-theme="cream"] {
+  --bg-main: #F4F4F8;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #ECEDF3;
+  --bg-nav: rgba(255, 255, 255, 0.96);
+  --text-main: #121417;
+  --text-muted: #646D7A;
+  --border-col: #E2E4EC;
+  --accent: #2B50EC;
+}
+
+/* SAMSUNG ONE UI 9 — DEEP BLACK AMOLED THEME */
+html[data-theme="black"] {
+  --bg-main: #000000;
+  --bg-card: #12141A;
+  --bg-subtle: #1B1E26;
+  --bg-nav: rgba(18, 20, 26, 0.96);
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --border-col: #252A36;
+  --accent: #4C6EF5;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Gujarati', sans-serif;
+  overscroll-behavior-y: none;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.one-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-col);
+  border-radius: 28px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.subtle-pill {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-col);
+  border-radius: 18px;
+  transition: all 0.2s ease;
+}
+
+.theme-input {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-col);
+  color: var(--text-main);
+  border-radius: 16px;
+  transition: border-color 0.2s ease;
+}
+.theme-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.muted-text {
+  color: var(--text-muted);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.anim-fade {
+  animation: fadeSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tour-spotlight {
+  position: relative;
+  z-index: 45 !important;
+  border: 2.5px solid #2B50EC !important;
+  box-shadow: 0 0 0 6px rgba(43, 80, 236, 0.22), 0 12px 32px rgba(43, 80, 236, 0.25) !important;
+  transform: scale(1.01);
+}
+
+@keyframes confettiFall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(520deg); opacity: 0; }
+}
+.confetti-piece {
+  position: fixed;
+  top: 0;
+  width: 9px;
+  height: 14px;
+  border-radius: 3px;
+  z-index: 9999;
+  pointer-events: none;
+  animation: confettiFall 2.2s ease-out forwards;
+}
