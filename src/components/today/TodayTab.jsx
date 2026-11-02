@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { DailyCountdown } from "./DailyCountdown";
 import { DailyGoal } from "./DailyGoal";
 import { StudyLogger } from "./StudyLogger";
 import { DueRevisions } from "./DueRevisions";
@@ -8,7 +7,6 @@ import { useStudy } from "../../context/StudyContext";
 import { todayISO } from "../../utils/helpers";
 
 export function TodayTab({
-  onOpenMultiExam,
   onOpenExtraRev,
   onOpenQuickNotes,
   onOpenChapLock,
@@ -63,19 +61,16 @@ export function TodayTab({
 
   return (
     <div id="tab-today" className="space-y-3.5 anim-fade">
-      {/* 1. Daily Countdown Widget */}
-      <DailyCountdown onOpenMultiExam={onOpenMultiExam} />
-
-      {/* 2. Daily Target Progress Bar */}
+      {/* 1. Daily Target Progress Bar */}
       <DailyGoal />
 
-      {/* 3. Daily Study Logger */}
+      {/* 2. Daily Study Logger */}
       <StudyLogger
         onOpenChapLock={onOpenChapLock}
         onNavigateToSyllabus={onNavigateToSyllabus}
       />
 
-      {/* 4. Formula & Notes Banner */}
+      {/* 3. Formula & Notes Banner */}
       <div className="one-card p-3.5 flex items-center justify-between gap-2 border-l-4 border-l-indigo-500">
         <div onClick={onOpenQuickNotes} className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
           <div className="w-9 h-9 rounded-2xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center font-extrabold text-base shrink-0">
@@ -96,10 +91,10 @@ export function TodayTab({
         </button>
       </div>
 
-      {/* 5. Today's Due Revisions */}
+      {/* 4. Today's Due Revisions */}
       <DueRevisions onOpenExtraRev={onOpenExtraRev} />
 
-      {/* 6. Quick Notes Card */}
+      {/* 5. Quick Notes Card */}
       <div className="one-card p-4 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-extrabold">📌 Quick Notes</h2>
@@ -193,7 +188,7 @@ export function TodayTab({
         </div>
       </div>
 
-      {/* 7. Unified Color-Coded Activity & History */}
+      {/* 6. Unified Color-Coded Activity & History */}
       <ActivityHistory />
     </div>
   );

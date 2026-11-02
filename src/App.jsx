@@ -8,6 +8,7 @@ import { Header } from "./components/layout/Header";
 import { BottomNav } from "./components/layout/BottomNav";
 import { SideDrawer } from "./components/layout/SideDrawer";
 import { ToastAndConfetti } from "./components/common/ToastAndConfetti";
+import { DailyCountdown } from "./components/today/DailyCountdown";
 import { KpiCards } from "./components/today/KpiCards";
 
 // Screens
@@ -131,12 +132,15 @@ export function App() {
       <main className="max-w-md mx-auto px-3.5 pt-3.5">
         <Header onOpenDrawer={() => setDrawerOpen(true)} />
 
-        {/* Top 4 Clickable KPI Cards - ALWAYS VISIBLE ACROSS ALL TABS (Today, Syllabus, Tests, Profile) */}
+        {/* 1. Daily Countdown Widget - પેલા Timer */}
+        <DailyCountdown onOpenMultiExam={() => setMultiExamOpen(true)} />
+
+        {/* 2. Top 4 Clickable KPI Cards - પછી ૪ બોક્સ */}
         <KpiCards onKpiClick={handleKpiClick} />
 
+        {/* Active Tab Content */}
         {activeTab === "today" && (
           <TodayTab
-            onOpenMultiExam={() => setMultiExamOpen(true)}
             onOpenExtraRev={() => setExtraRevOpen(true)}
             onOpenQuickNotes={() => setQuickNotesOpen(true)}
             onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
