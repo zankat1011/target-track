@@ -1,0 +1,15 @@
+{
+  "name": "Target Track",
+  "short_name": "Target Track",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF7F2",
+  "theme_color": "#3B5BDB",
+  "icons": [
+    {
+      "src": "https://cdn.corenexis.com/f/7uojdNqTvNd.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
