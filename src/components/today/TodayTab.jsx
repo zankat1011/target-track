@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DailyHabits } from "./DailyHabits";
 import { DailyGoal } from "./DailyGoal";
 import { StudyLogger } from "./StudyLogger";
 import { DueRevisions } from "./DueRevisions";
@@ -16,6 +17,30 @@ export function TodayTab({
   const [quickNoteText, setQuickNoteText] = useState("");
   const [quickNoteSub, setQuickNoteSub] = useState("General");
   const [quickNoteFilter, setQuickNoteFilter] = useState("ALL");
+  const [isListening, setIsListening] = useState(false);
+
+  const startVoiceDictation = () => {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      return alert("તમારા બ્રાઉઝરમાં Voice Typing સપોર્ટ નથી (Google Chrome વાપરો).");
+    }
+    try {
+      const rec = new SpeechRec();
+      rec.lang = "gu-IN";
+      rec.interimResults = false;
+      setIsListening(true);
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setQuickNoteText((prev) => (prev ? prev + " " : "") + transcript);
+      };
+      rec.onerror = () => setIsListening(false);
+      rec.onend = () => setIsListening(false);
+      rec.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
 
   const subjects = currentUser?.subjects || [];
   const quickNotes = currentUser?.quickNotes || [];
@@ -61,6 +86,9 @@ export function TodayTab({
 
   return (
     <div id="tab-today" className="space-y-3.5 anim-fade">
+      {/* 0. Daily 3-Habit Checklist */}
+      <DailyHabits />
+
       {/* 1. Daily Target Progress Bar */}
       <DailyGoal />
 
@@ -135,13 +163,25 @@ export function TodayTab({
                 </option>
               ))}
             </select>
-            <input
-              type="text"
-              placeholder="સૂત્ર કે શોર્ટ નોંધ લખો..."
-              value={quickNoteText}
-              onChange={(e) => setQuickNoteText(e.target.value)}
-              className="col-span-2 theme-input px-3 py-2 text-xs"
-            />
+            <div className="col-span-2 flex gap-1.5">
+              <input
+                type="text"
+                placeholder="સૂત્ર કે શોર્ટ નોંધ લખો (અથવા 🎙️ માઈક વાપરો)..."
+                value={quickNoteText}
+                onChange={(e) => setQuickNoteText(e.target.value)}
+                className="flex-1 theme-input px-3 py-2 text-xs"
+              />
+              <button
+                type="button"
+                onClick={startVoiceDictation}
+                className={`subtle-pill px-2.5 rounded-xl flex items-center justify-center shrink-0 hover:border-indigo-500 ${
+                  isListening ? "ring-2 ring-rose-500 text-rose-500 animate-pulse" : ""
+                }`}
+                title="Voice Typing (Gujarati / English)"
+              >
+                🎙️
+              </button>
+            </div>
           </div>
           <button
             type="submit"
