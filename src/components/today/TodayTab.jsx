@@ -64,13 +64,13 @@ export function TodayTab({
       {/* 1. Daily Target Progress Bar */}
       <DailyGoal />
 
-      {/* 2. Daily Study Logger */}
+      {/* 4. Daily Study Logger */}
       <StudyLogger
         onOpenChapLock={onOpenChapLock}
         onNavigateToSyllabus={onNavigateToSyllabus}
       />
 
-      {/* 3. Formula & Notes Banner */}
+      {/* 5. Formula & Notes Banner */}
       <div className="one-card p-3.5 flex items-center justify-between gap-2 border-l-4 border-l-indigo-500">
         <div onClick={onOpenQuickNotes} className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
           <div className="w-9 h-9 rounded-2xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center font-extrabold text-base shrink-0">
@@ -91,10 +91,10 @@ export function TodayTab({
         </button>
       </div>
 
-      {/* 4. Today's Due Revisions */}
+      {/* 6. Today's Due Revisions */}
       <DueRevisions onOpenExtraRev={onOpenExtraRev} />
 
-      {/* 5. Quick Notes Card */}
+      {/* 7. Quick Notes Card */}
       <div className="one-card p-4 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-extrabold">📌 Quick Notes</h2>
@@ -188,7 +188,7 @@ export function TodayTab({
         </div>
       </div>
 
-      {/* 6. Unified Color-Coded Activity & History */}
+      {/* 8. Unified Color-Coded Activity & History */}
       <ActivityHistory />
     </div>
   );

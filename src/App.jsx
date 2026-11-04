@@ -8,8 +8,6 @@ import { Header } from "./components/layout/Header";
 import { BottomNav } from "./components/layout/BottomNav";
 import { SideDrawer } from "./components/layout/SideDrawer";
 import { ToastAndConfetti } from "./components/common/ToastAndConfetti";
-import { DailyCountdown } from "./components/today/DailyCountdown";
-import { KpiCards } from "./components/today/KpiCards";
 
 // Screens
 import { AuthScreen } from "./components/auth/AuthScreen";
@@ -18,6 +16,10 @@ import { TodayTab } from "./components/today/TodayTab";
 import { SyllabusTab } from "./components/syllabus/SyllabusTab";
 import { AnalysisTab } from "./components/analysis/AnalysisTab";
 import { ProfileTab } from "./components/profile/ProfileTab";
+
+// Top Widgets
+import { DailyCountdown } from "./components/today/DailyCountdown";
+import { KpiCards } from "./components/today/KpiCards";
 
 // Modals
 import { MultiExamModal } from "./components/modals/MultiExamModal";
@@ -132,13 +134,15 @@ export function App() {
       <main className="max-w-md mx-auto px-3.5 pt-3.5">
         <Header onOpenDrawer={() => setDrawerOpen(true)} />
 
-        {/* 1. Daily Countdown Widget - પેલા Timer */}
-        <DailyCountdown onOpenMultiExam={() => setMultiExamOpen(true)} />
+        {/* 1. Timer (Daily Countdown) - ONLY on Today ("આજે") page */}
+        {activeTab === "today" && (
+          <DailyCountdown onOpenMultiExam={() => setMultiExamOpen(true)} />
+        )}
 
-        {/* 2. Top 4 Clickable KPI Cards - પછી ૪ બોક્સ */}
+        {/* 2. Top 4 KPI Boxes - Visible on ALL pages ("આજે", "સિલેબસ", "એનાલિસિસ", "એકાઉન્ટ") */}
         <KpiCards onKpiClick={handleKpiClick} />
 
-        {/* Active Tab Content */}
+        {/* 3. Tab Contents */}
         {activeTab === "today" && (
           <TodayTab
             onOpenExtraRev={() => setExtraRevOpen(true)}

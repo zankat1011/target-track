@@ -2,47 +2,36 @@ import React, { useState, useEffect } from "react";
 import { useStudy } from "../../context/StudyContext";
 import { DAILY_LIGHT_PALETTES } from "../../utils/constants";
 
-function calcTimeLeft(examDate) {
-  if (!examDate || !/^\d{4}-\d{2}-\d{2}$/.test(examDate)) {
-    return { days: "--", hours: "--", mins: "--", secs: "--" };
-  }
-  const targetTime = new Date(examDate + "T00:00:00").getTime();
-  const now = Date.now();
-  const diffMs = Math.max(0, targetTime - now);
-
-  const totalSeconds = Math.floor(diffMs / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const mins = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-
-  return {
-    days: String(days).padStart(2, "0"),
-    hours: String(hours).padStart(2, "0"),
-    mins: String(mins).padStart(2, "0"),
-    secs: String(secs).padStart(2, "0"),
-  };
-}
-
 export function DailyCountdown({ onOpenMultiExam }) {
   const { currentUser } = useStudy();
-
-  // Instant calculation on mount - zero delay, no waiting for interval!
-  const [timeLeft, setTimeLeft] = useState(() => calcTimeLeft(currentUser?.examDate));
+  const [timeLeft, setTimeLeft] = useState({ days: "--", hours: "--", mins: "--", secs: "--" });
 
   const dayIndex = new Date().getDay() % DAILY_LIGHT_PALETTES.length;
   const palette = DAILY_LIGHT_PALETTES[dayIndex];
 
   useEffect(() => {
-    // Run immediately when examDate changes
-    setTimeLeft(calcTimeLeft(currentUser?.examDate));
-
-    if (!currentUser?.examDate || !/^\d{4}-\d{2}-\d{2}$/.test(currentUser.examDate)) {
+    if (!currentUser || !currentUser.examDate || !/^\d{4}-\d{2}-\d{2}$/.test(currentUser.examDate)) {
+      setTimeLeft({ days: "--", hours: "--", mins: "--", secs: "--" });
       return;
     }
 
     const timer = setInterval(() => {
-      setTimeLeft(calcTimeLeft(currentUser?.examDate));
+      const targetTime = new Date(currentUser.examDate + "T00:00:00").getTime();
+      const now = Date.now();
+      const diffMs = Math.max(0, targetTime - now);
+
+      const totalSeconds = Math.floor(diffMs / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+
+      setTimeLeft({
+        days: String(days).padStart(2, "0"),
+        hours: String(hours).padStart(2, "0"),
+        mins: String(mins).padStart(2, "0"),
+        secs: String(secs).padStart(2, "0"),
+      });
     }, 1000);
 
     return () => clearInterval(timer);
