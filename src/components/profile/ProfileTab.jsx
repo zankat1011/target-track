@@ -230,6 +230,30 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
     triggerCelebration("🗑️ રિપોર્ટ ડિલીટ થયો", "તમારો રિપોર્ટ લિસ્ટમાંથી હટાવી દેવામાં આવ્યો છે.");
   };
 
+  // Delete Individual Admin 1-to-1 Direct Message
+  const handleDeleteDirectMessage = (msgToDelete, index) => {
+    if (!window.confirm("શું તમે આ Admin મેસેજ કાઢી નાખવા માંગો છો?")) return;
+    updateCurrentUser((u) => {
+      u.directMessages = (u.directMessages || []).filter((m, i) => {
+        if (msgToDelete.id && m.id) return m.id !== msgToDelete.id;
+        if (msgToDelete.date && msgToDelete.text) {
+          return !(m.date === msgToDelete.date && m.text === msgToDelete.text);
+        }
+        return i !== index;
+      });
+    });
+    triggerCelebration("🗑️ મેસેજ ડિલીટ થયો", "Admin મેસેજ લિસ્ટમાંથી હટાવી દેવામાં આવ્યો છે.");
+  };
+
+  // Clear All Admin 1-to-1 Direct Messages
+  const handleClearAllDirectMessages = () => {
+    if (!window.confirm("શું તમે બધા Admin 1-to-1 મેસેજીસ સાફ કરવા માંગો છો?")) return;
+    updateCurrentUser((u) => {
+      u.directMessages = [];
+    });
+    triggerCelebration("🧹 બધા મેસેજીસ સાફ કર્યા", "તમારું મેસેજ ઇનબોક્સ ખાલી થઈ ગયું છે.");
+  };
+
   // Clear All My Data (Working 2-Step In-App Modal)
   const handleClearAllData = () => {
     setShowClearModal(true);
@@ -550,18 +574,38 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
         {/* 1-to-1 Admin Direct Message Inbox */}
         {dms.length > 0 && (
           <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
-            <div className="text-[10px] font-extrabold uppercase muted-text">
-              Admin 1-to-1 Messages:
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-extrabold uppercase muted-text">
+                Admin 1-to-1 Messages:
+              </div>
+              <button
+                type="button"
+                onClick={handleClearAllDirectMessages}
+                className="text-[10px] font-extrabold text-rose-500 hover:text-rose-700 underline transition"
+                title="બધા Admin મેસેજીસ સાફ કરો"
+              >
+                Clear All
+              </button>
             </div>
-            {dms.map((m) => (
-              <div key={m.id} className="subtle-pill p-2.5 border-l-4 border-l-emerald-500 text-xs">
+            {dms.map((m, idx) => (
+              <div key={m.id || idx} className="subtle-pill p-2.5 border-l-4 border-l-emerald-500 text-xs space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold text-emerald-500">
                     💬 Admin Direct Message
                   </span>
-                  <span className="text-[9px] muted-text">{m.date}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] muted-text">{m.date}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDirectMessage(m, idx)}
+                      className="text-rose-500 hover:text-rose-700 p-0.5 text-xs transition"
+                      title="આ મેસેજ કાઢી નાખો"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-                <div className="font-semibold mt-1 whitespace-pre-wrap">{m.text}</div>
+                <div className="font-semibold whitespace-pre-wrap leading-relaxed">{m.text}</div>
               </div>
             ))}
           </div>

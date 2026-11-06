@@ -233,6 +233,7 @@ export function StudyProvider({ children }) {
       clearedUser.customHabits = [];
       clearedUser.focusMinutes = 0;
       clearedUser.focusSessions = 0;
+      clearedUser.directMessages = [];
       clearedUser.exams = [
         {
           id: "ex_main",
