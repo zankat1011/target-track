@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useStudy } from "../../context/StudyContext";
+import { ClearDataModal } from "../common/ClearDataModal";
 import {
   todayISO,
   openAdminWhatsApp,
@@ -10,7 +11,7 @@ import {
 import { LIVE_TEST_URL } from "../../utils/constants";
 
 export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
-  const { currentUser, updateCurrentUser, db, commitDb, triggerCelebration } = useStudy();
+  const { currentUser, updateCurrentUser, clearCurrentUserData, db, commitDb, triggerCelebration } = useStudy();
 
   // Profile Form States
   const [name, setName] = useState(currentUser?.name || "");
@@ -25,6 +26,9 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
   // Feedback States
   const [feedbackType, setFeedbackType] = useState("Bug Report");
   const [feedbackMsg, setFeedbackMsg] = useState("");
+
+  // Clear Data Modal State
+  const [showClearModal, setShowClearModal] = useState(false);
 
   // Notification State
   const [notifGranted, setNotifGranted] = useState(() => {
@@ -99,20 +103,49 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
     });
   };
 
+  // Safe Mobile Notification
+  const showMobileSafeNotification = async (title, body) => {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && reg.showNotification) {
+          await reg.showNotification(title, {
+            body,
+            icon: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>",
+            badge: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>",
+            vibrate: [200, 100, 200],
+          });
+          return;
+        }
+      }
+      new Notification(title, { body });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Browser Notification Enable
-  const handleEnableNotification = () => {
+  const handleEnableNotification = async () => {
     if (!("Notification" in window)) {
       alert("તમારા બ્રાઉઝરમાં Notification સપોર્ટ નથી.");
       return;
     }
-    Notification.requestPermission().then((perm) => {
+    try {
+      const perm = await Notification.requestPermission();
       if (perm === "granted") {
         setNotifGranted(true);
+        await showMobileSafeNotification(
+          "🎯 Target Track Alert Active!",
+          "તમારા બાકી રિવિઝનના નોટિફિકેશન હવે નિયમિત મળશે."
+        );
         triggerCelebration("🔔 Notifications Active!", "બાકી રિવિઝન માટે એલર્ટ મળશે.");
       } else {
-        alert("નોટિફિકેશન પરમિશન નકારવામાં આવી છે. બ્રાઉઝર સેટિંગ્સમાંથી Allow કરો.");
+        alert("⚠️ બ્રાઉઝર સેટિંગ્સમાંથી Notification પરમિશન Allow કરો.");
       }
-    });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Submit Feedback
@@ -120,11 +153,14 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
     if (!feedbackMsg.trim()) return alert("કૃપા કરીને તમારો મેસેજ કે સૂચન લખો.");
     const newFeedback = {
       id: `fb_${Date.now()}`,
-      date: todayISO(),
+      date: nowFormattedTimestamp(),
       studentName: currentUser?.name || "Student",
       mobile: currentUser?.mobile || "",
       type: feedbackType,
+      status: "Pending", // 'Pending' | 'In Progress' | 'Resolved'
       message: feedbackMsg.trim(),
+      adminReply: "",
+      repliedAt: "",
     };
 
     commitDb({
@@ -138,7 +174,7 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
         `*Target Track — ${feedbackType}*\nStudent: ${currentUser?.name} (${currentUser?.mobile})\nMessage: ${newFeedback.message}`
       );
     } else {
-      triggerCelebration("📩 રિપોર્ટ મોકલાઈ ગયો!", "Admin ટૂંક સમયમાં ચેક કરશે.");
+      triggerCelebration("📩 રિપોર્ટ સબમિટ થયો!", "નીચે તમારી હિસ્ટ્રીમાં તેનું Live Status દેખાશે.");
     }
   };
 
@@ -176,57 +212,9 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
     reader.readAsText(file);
   };
 
-  // Clear All My Data (Strict 2-Step)
+  // Clear All My Data (Working 2-Step In-App Modal)
   const handleClearAllData = () => {
-    const step1 = confirm(
-      "⚠️ STEP 1/2 WARNING:\nશું તમે ખરેખર તમારો બધો જ અભ્યાસ ડેટા (Subjects, Chapters, Revisions, Tests, Notes) Clear કરવા માંગો છો?"
-    );
-    if (!step1) return;
-
-    const step2 = prompt(
-      "🚨 STEP 2/2 FINAL CONFIRMATION:\nતમારો બધો ડેટા રીસેટ કરવા માટે નીચે કેપિટલમાં DELETE લખો:"
-    );
-    if (step2 !== "DELETE") {
-      alert("❌ ડેટા Clear કરવાની પ્રક્રિયા રદ કરવામાં આવી છે.");
-      return;
-    }
-
-    // Archive snapshot to Admin vault
-    const archiveItem = {
-      archiveId: `arch_${Date.now()}`,
-      deletedAt: nowFormattedTimestamp(),
-      deletedBy: "Student (Self Clear)",
-      mobile: currentUser.mobile,
-      name: currentUser.name,
-      exam: currentUser.exam,
-      snapshot: JSON.parse(
-        JSON.stringify({
-          subjects: currentUser.subjects || [],
-          logs: currentUser.logs || [],
-          revisions: currentUser.revisions || [],
-          tests: currentUser.tests || [],
-          quickNotes: currentUser.quickNotes || [],
-          exams: currentUser.exams || [],
-        })
-      ),
-    };
-
-    const nextDeleted = [archiveItem, ...(db.deletedData || [])];
-
-    updateCurrentUser((u) => {
-      u.subjects = [];
-      u.logs = [];
-      u.revisions = [];
-      u.tests = [];
-      u.quickNotes = [];
-      u.focusMinutes = 0;
-      u.focusSessions = 0;
-      u.exams = [{ id: "ex_main", name: u.exam || "GPSC / CCE", examDate: u.examDate || "", subjects: [] }];
-      u.activeExamId = "ex_main";
-    });
-
-    commitDb({ ...db, deletedData: nextDeleted });
-    triggerCelebration("🗑️ Data Cleared!", "તમારું એકાઉન્ટ નવેસરથી રીસેટ થઈ ગયું છે.");
+    setShowClearModal(true);
   };
 
   const valLeft = getValidityRemainingDays(currentUser);
@@ -235,8 +223,9 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
     ? "Lifetime Pro"
     : currentUser?.planName || (valLeft <= 5 ? "5D Free Trial" : "Pro Plan");
 
-  // Direct 1-to-1 admin replies
+  // Direct 1-to-1 admin replies & User Bug/Feature reports
   const dms = currentUser?.directMessages || [];
+  const myReports = (db.feedbacks || []).filter((f) => f.mobile === currentUser?.mobile);
   const repliedReports = (db.feedbacks || []).filter(
     (f) => f.mobile === currentUser?.mobile && f.adminReply
   );
@@ -497,8 +486,8 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
           </button>
         </div>
 
-        {/* 1-to-1 Admin Message Inbox */}
-        {(dms.length > 0 || repliedReports.length > 0) && (
+        {/* 1-to-1 Admin Direct Message Inbox */}
+        {dms.length > 0 && (
           <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
             <div className="text-[10px] font-extrabold uppercase muted-text">
               Admin 1-to-1 Messages:
@@ -514,16 +503,76 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
                 <div className="font-semibold mt-1 whitespace-pre-wrap">{m.text}</div>
               </div>
             ))}
-            {repliedReports.map((f) => (
-              <div key={f.id} className="subtle-pill p-2.5 border-l-4 border-l-indigo-500 text-xs">
-                <div className="text-[10px] muted-text">Your Report: "{f.message}"</div>
-                <div className="font-extrabold text-indigo-500 mt-1">
-                  ↪️ Admin Reply: {f.adminReply}
-                </div>
-              </div>
-            ))}
           </div>
         )}
+
+        {/* User Bug & Feature Report History + Live Status */}
+        <div className="pt-2 border-t space-y-2" style={{ borderColor: "var(--border-col)" }}>
+          <div className="text-[11px] font-extrabold uppercase muted-text">
+            📋 My Bug & Feature Report History
+          </div>
+          {myReports.length === 0 ? (
+            <div className="text-[11px] muted-text text-center py-2">
+              તમે હજુ કોઈ Bug કે Feature Request મોકલી નથી.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+              {myReports.map((f) => {
+                const st = f.status || (f.adminReply ? "Resolved" : "Pending");
+                let stBadge = (
+                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500">
+                    ⏳ Pending
+                  </span>
+                );
+                if (st === "In Progress") {
+                  stBadge = (
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500">
+                      ⚙️ Working On It
+                    </span>
+                  );
+                } else if (st === "Resolved") {
+                  stBadge = (
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                      ✅ Resolved
+                    </span>
+                  );
+                }
+
+                return (
+                  <div
+                    key={f.id}
+                    className={`subtle-pill p-3 space-y-2 text-xs border-l-4 ${
+                      st === "Resolved" ? "border-l-emerald-500" : "border-l-indigo-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-extrabold text-indigo-500">
+                        [{f.type}] • <span className="muted-text font-normal">{f.date}</span>
+                      </span>
+                      {stBadge}
+                    </div>
+                    <div className="font-semibold text-xs leading-relaxed">{f.message}</div>
+                    {f.adminReply ? (
+                      <div className="one-card p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold text-emerald-500">
+                            🛡️ Admin Response
+                          </span>
+                          <span className="text-[9px] muted-text">{f.repliedAt || ""}</span>
+                        </div>
+                        <div className="text-xs font-bold leading-relaxed">{f.adminReply}</div>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] muted-text italic">
+                        Admin તરફથી જવાબની રાહ જોવાઈ રહી છે...
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 7. Data Backup, Restore & Clear All */}
@@ -557,6 +606,13 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
           </button>
         </div>
       </div>
+
+      {/* 2-Step Clear All Data Modal */}
+      <ClearDataModal
+        isOpen={showClearModal}
+        onClose={() => setShowClearModal(false)}
+        onConfirm={clearCurrentUserData}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useStudy } from "../../context/StudyContext";
 import { todayISO } from "../../utils/helpers";
+import { OFFICIAL_SYLLABUS_TEMPLATES } from "../../utils/constants";
 
 export function SyllabusTab({ onOpenBulkImport, onOpenChapLock }) {
   const { currentUser, updateCurrentUser, syncCommonChapterProgressAcrossExams, triggerCelebration } = useStudy();
@@ -46,6 +47,40 @@ export function SyllabusTab({ onOpenBulkImport, onOpenChapLock }) {
     });
     setExpandedSubjects((prev) => ({ ...prev, [newId]: true }));
     setNewSubjectName("");
+  };
+
+  // 1-Click Official Exam Syllabus Template Loader
+  const loadOfficialSyllabusTemplate = (templateKey) => {
+    const tpl = OFFICIAL_SYLLABUS_TEMPLATES[templateKey];
+    if (!tpl) return;
+    if (!window.confirm(`${templateKey} નો ઓફિશિયલ સિલેબસ (વિષયો અને ચેપ્ટર્સ) તમારા હાલના સિલેબસમાં ઉમેરવો છે?`)) return;
+
+    let addedCount = 0;
+    updateCurrentUser((user) => {
+      if (!Array.isArray(user.subjects)) user.subjects = [];
+      tpl.forEach((item) => {
+        let sub = user.subjects.find((s) => s.name.toLowerCase() === item.name.toLowerCase());
+        if (!sub) {
+          sub = { id: `sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: item.name, chapters: [] };
+          user.subjects.push(sub);
+        }
+        item.chaps.forEach((chName) => {
+          if (!sub.chapters.some((c) => c.name.toLowerCase() === chName.toLowerCase())) {
+            sub.chapters.push({
+              id: `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: chName,
+              donePages: 0,
+              revisedPages: 0,
+              completed: false,
+              topics: []
+            });
+            addedCount++;
+          }
+        });
+      });
+    });
+
+    triggerCelebration(`📚 ${templateKey} સિલેબસ લોડ થયો!`, `${addedCount} ચેપ્ટર્સ સફળતાપૂર્વક ઉમેરાયા!`);
   };
 
   // Edit Subject
@@ -277,6 +312,37 @@ export function SyllabusTab({ onOpenBulkImport, onOpenChapLock }) {
             + વિષય
           </button>
         </form>
+      </div>
+
+      {/* 1.5 NEW: 1-CLICK OFFICIAL EXAM SYLLABUS TEMPLATES */}
+      <div className="one-card p-3.5 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-extrabold">⚡ 1-Click તૈયાર સિલેબસ લોડ કરો (Templates)</span>
+          <span className="text-[9px] font-bold muted-text">Auto-Add Subjects & Chapters</span>
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          <button
+            type="button"
+            onClick={() => loadOfficialSyllabusTemplate("CCE")}
+            className="subtle-pill px-3 py-1.5 text-[11px] font-extrabold text-indigo-500 shrink-0 hover:border-indigo-500 transition"
+          >
+            + CCE (Prelims + Mains)
+          </button>
+          <button
+            type="button"
+            onClick={() => loadOfficialSyllabusTemplate("GPSC")}
+            className="subtle-pill px-3 py-1.5 text-[11px] font-extrabold text-emerald-500 shrink-0 hover:border-emerald-500 transition"
+          >
+            + GPSC Class 1-2
+          </button>
+          <button
+            type="button"
+            onClick={() => loadOfficialSyllabusTemplate("POLICE")}
+            className="subtle-pill px-3 py-1.5 text-[11px] font-extrabold text-amber-500 shrink-0 hover:border-amber-500 transition"
+          >
+            + PSI / Constable
+          </button>
+        </div>
       </div>
 
       {/* Accordion Controls */}

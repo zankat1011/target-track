@@ -205,6 +205,7 @@ export function AdminApp() {
 
     f.adminReply = replyText;
     f.repliedAt = nowFormattedTimestamp();
+    f.status = "Resolved";
 
     const nextUsers = { ...db.users };
     const target = nextUsers[f.mobile];
@@ -213,7 +214,7 @@ export function AdminApp() {
       target.directMessages.unshift({
         id: `dm_${Date.now()}`,
         date: nowFormattedTimestamp(),
-        text: `🛠️ [Re: ${f.message}]\n${replyText}`,
+        text: `🛠️ [${f.type} — Resolved]\nYour Report: "${f.message}"\n\n✅ Admin Reply: ${replyText}`,
         seen: false,
       });
     }
@@ -221,6 +222,17 @@ export function AdminApp() {
     commitDb({ ...db, feedbacks: [...feedbacks], users: nextUsers });
     setReplyDrafts((prev) => ({ ...prev, [fbId]: "" }));
     triggerCelebration("📩 1-to-1 Reply Sent!", `${f.studentName} ને મેસેજ મળી જશે.`);
+  };
+
+  const handleUpdateFeedbackStatus = (fbId, newStatus) => {
+    const next = feedbacks.map((f) => {
+      if (f.id === fbId) {
+        return { ...f, status: newStatus };
+      }
+      return f;
+    });
+    commitDb({ ...db, feedbacks: next });
+    triggerCelebration("Status Updated", `Report status set to ${newStatus}`);
   };
 
   const handleCopyReport = (msg) => {
@@ -873,6 +885,15 @@ export function AdminApp() {
                         <span className="font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 text-[10px]">
                           {f.type}
                         </span>
+                        <select
+                          value={f.status || (f.adminReply ? "Resolved" : "Pending")}
+                          onChange={(e) => handleUpdateFeedbackStatus(f.id, e.target.value)}
+                          className="theme-input px-2 py-0.5 text-[10px] font-extrabold"
+                        >
+                          <option value="Pending">⏳ Pending</option>
+                          <option value="In Progress">⚙️ Working</option>
+                          <option value="Resolved">✅ Resolved</option>
+                        </select>
                         <span className="font-extrabold text-sm">👤 {f.studentName || "Student"}</span>
                         <a href={`tel:${f.mobile}`} className="font-mono font-extrabold text-emerald-500 underline">
                           📞 {f.mobile}

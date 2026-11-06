@@ -184,6 +184,78 @@ export function StudyProvider({ children }) {
     });
   }, []);
 
+  // Clear Current User Data with Instant Cloud Wipe & Archive
+  const clearCurrentUserData = useCallback(async () => {
+    if (isDemoMode) {
+      alert("🔒 Demo Mode is Read-Only.");
+      return;
+    }
+    if (!session || session.role !== "student" || !session.mobile) return;
+
+    const user = db.users[session.mobile];
+    if (!user) return;
+
+    const archiveItem = {
+      archiveId: `arch_${Date.now()}`,
+      deletedAt: nowFormattedTimestamp(),
+      deletedBy: "Student (Self Clear)",
+      mobile: user.mobile,
+      name: user.name,
+      exam: user.exam,
+      snapshot: JSON.parse(
+        JSON.stringify({
+          subjects: user.subjects || [],
+          logs: user.logs || [],
+          revisions: user.revisions || [],
+          tests: user.tests || [],
+          quickNotes: user.quickNotes || [],
+          exams: user.exams || [],
+          dailyHabitsLog: user.dailyHabitsLog || {},
+          customHabits: user.customHabits || []
+        })
+      )
+    };
+
+    const nextDb = JSON.parse(JSON.stringify(db));
+    if (!Array.isArray(nextDb.deletedData)) nextDb.deletedData = [];
+    nextDb.deletedData.unshift(archiveItem);
+
+    const clearedUser = nextDb.users[session.mobile];
+    if (clearedUser) {
+      clearedUser.subjects = [];
+      clearedUser.logs = [];
+      clearedUser.revisions = [];
+      clearedUser.tests = [];
+      clearedUser.quickNotes = [];
+      clearedUser.dailyHabitsLog = {};
+      clearedUser.focusMinutes = 0;
+      clearedUser.focusSessions = 0;
+      clearedUser.exams = [
+        {
+          id: "ex_main",
+          name: clearedUser.exam || "GPSC / CCE",
+          examDate: clearedUser.examDate || "",
+          subjects: []
+        }
+      ];
+      clearedUser.activeExamId = "ex_main";
+    }
+
+    setDb(nextDb);
+    const str = JSON.stringify(nextDb);
+    try {
+      localStorage.setItem(DB_KEY, str);
+      localStorage.setItem(DB_MIRROR_KEY, str);
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (navigator.onLine) {
+      await saveCloudDatabase(nextDb, session, false);
+    }
+    triggerCelebration("🗑️ Data Cleared!", "તમારો બધો ડેટા રીસેટ થઈ ગયો છે.");
+  }, [isDemoMode, session, db, triggerCelebration]);
+
   return (
     <StudyContext.Provider
       value={{
@@ -192,6 +264,7 @@ export function StudyProvider({ children }) {
         cloudStatus,
         currentUser,
         updateCurrentUser,
+        clearCurrentUserData,
         syncWithCloud,
         syncCommonChapterProgressAcrossExams,
         triggerCelebration,

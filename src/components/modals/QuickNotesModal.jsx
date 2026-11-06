@@ -11,6 +11,56 @@ export function QuickNotesModal({ isOpen, onClose }) {
   const [chapSelect, setChapSelect] = useState("All Chapters");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [isNotesBlurMode, setIsNotesBlurMode] = useState(false);
+  const [revealedNotes, setRevealedNotes] = useState({});
+
+  const startVoiceDictation = async () => {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      return alert(
+        "🎙️ મોબાઈલ કીબોર્ડમાં રહેલા Google Mic (🎤) આઇકનનો ઉપયોગ કરો (આ WebView માં ડાયરેક્ટ માઈક બ્લોક છે)."
+      );
+    }
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } catch (e) {
+      return alert(
+        "⚠️ માઈક્રોફોન પરમિશન Allow કરો (બ્રાઉઝર URL બારની બાજુમાં 🔒 Lock આઇકન પર ક્લિક કરી Microphone ચાલુ કરો)."
+      );
+    }
+
+    try {
+      const rec = new SpeechRec();
+      rec.lang = "gu-IN";
+      rec.continuous = false;
+      rec.interimResults = false;
+      setIsListening(true);
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setText((prev) => (prev ? prev.trim() + " " : "") + transcript);
+      };
+      rec.onerror = () => setIsListening(false);
+      rec.onend = () => setIsListening(false);
+      rec.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
+
+  const toggleBlurMode = () => {
+    setIsNotesBlurMode((prev) => !prev);
+    setRevealedNotes({});
+  };
+
+  const handleRevealNote = (id) => {
+    if (isNotesBlurMode) {
+      setRevealedNotes((prev) => ({ ...prev, [id]: true }));
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -131,20 +181,48 @@ export function QuickNotesModal({ isOpen, onClose }) {
             className="w-full theme-input px-3 py-2 text-xs font-bold"
           />
 
-          <textarea
-            rows="2"
-            placeholder="સૂત્ર, શોર્ટ-કી અથવા અગત્યની નોંધ લખો..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            className="w-full theme-input p-3 text-xs font-semibold"
-          />
+          <div className="flex gap-1.5">
+            <textarea
+              rows="2"
+              placeholder="સૂત્ર, શોર્ટ-કી અથવા અગત્યની નોંધ લખો (અથવા 🎙️ માઈક દબાવીને બોલો)..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="flex-1 theme-input p-3 text-xs font-semibold"
+            />
+            <button
+              type="button"
+              onClick={startVoiceDictation}
+              id="btnVoiceMicModal"
+              className={`subtle-pill px-3.5 rounded-2xl text-base flex flex-col items-center justify-center shrink-0 hover:border-indigo-500 ${
+                isListening ? "ring-2 ring-rose-500 text-rose-500 animate-pulse" : ""
+              }`}
+              title="Voice Typing (Gujarati / English)"
+            >
+              <span>🎙️</span>
+              <span className="text-[9px] font-extrabold mt-0.5">{isListening ? "..." : "Speak"}</span>
+            </button>
+          </div>
 
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2.5 rounded-2xl text-xs shadow-sm transition"
-          >
-            + ફોલ્ડરમાં સેવ કરો
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="submit"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2.5 rounded-2xl text-xs shadow-sm transition"
+            >
+              + ફોલ્ડરમાં સેવ કરો
+            </button>
+            <button
+              type="button"
+              onClick={toggleBlurMode}
+              id="btnBlurRecallToggle"
+              className={`font-extrabold py-2.5 rounded-2xl text-xs transition ${
+                isNotesBlurMode
+                  ? "bg-amber-500 text-white shadow-sm"
+                  : "subtle-pill text-amber-500 border border-amber-500/40"
+              }`}
+            >
+              {isNotesBlurMode ? "👁️ Show All (Blur: ON)" : "🧠 Test Memory (Blur: OFF)"}
+            </button>
+          </div>
         </form>
 
         {/* Subject Filter Tabs Bar */}
@@ -231,7 +309,16 @@ export function QuickNotesModal({ isOpen, onClose }) {
                   <div className="text-xs font-extrabold truncate">
                     {n.title || n.subject || "Note"}
                   </div>
-                  <p className="text-[11px] muted-text leading-relaxed break-words whitespace-pre-wrap">
+                  <p
+                    onClick={() => handleRevealNote(n.id)}
+                    title={isNotesBlurMode && !revealedNotes[n.id] ? "Touch to reveal answer" : undefined}
+                    style={{
+                      filter: isNotesBlurMode && !revealedNotes[n.id] ? "blur(5px)" : "none",
+                      cursor: isNotesBlurMode && !revealedNotes[n.id] ? "pointer" : "text",
+                      transition: "filter 0.2s ease"
+                    }}
+                    className="text-[11px] muted-text leading-relaxed break-words whitespace-pre-wrap select-none"
+                  >
                     {n.text}
                   </p>
                 </div>

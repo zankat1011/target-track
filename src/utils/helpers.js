@@ -61,6 +61,7 @@ export function normalizeUserObject(u) {
   if (!Array.isArray(u.revisions)) u.revisions = [];
   if (!Array.isArray(u.tests)) u.tests = [];
   if (!Array.isArray(u.quickNotes)) u.quickNotes = [];
+  if (!u.dailyHabitsLog || typeof u.dailyHabitsLog !== "object") u.dailyHabitsLog = {};
   if (typeof u.focusMinutes !== "number") u.focusMinutes = 0;
   if (typeof u.focusSessions !== "number") u.focusSessions = 0;
   return u;

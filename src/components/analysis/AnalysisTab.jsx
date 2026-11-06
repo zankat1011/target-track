@@ -17,6 +17,56 @@ export function AnalysisTab() {
   const [selectedSubIds, setSelectedSubIds] = useState([]);
   const [selectedChapKeys, setSelectedChapKeys] = useState([]);
 
+  // Negative Marking & Cut-off Simulator states
+  const [simAttempt, setSimAttempt] = useState("");
+  const [simWrong, setSimWrong] = useState("");
+  const [simNegRatio, setSimNegRatio] = useState("0.25");
+  const [simCutoff, setSimCutoff] = useState("75");
+
+  const simAttemptNum = parseFloat(simAttempt) || 0;
+  const simWrongNum = parseFloat(simWrong) || 0;
+  const simNegNum = parseFloat(simNegRatio) || 0.25;
+  const simCutoffNum = parseFloat(simCutoff) || 75;
+  const simRightNum = Math.max(0, simAttemptNum - simWrongNum);
+  const simPenalty = +(simWrongNum * simNegNum).toFixed(2);
+  const simNetScore = Math.max(0, +(simRightNum - simPenalty).toFixed(2));
+
+  const handleSimAttemptChange = (val) => {
+    setSimAttempt(val);
+    const att = parseFloat(val) || 0;
+    const wrg = parseFloat(simWrong) || 0;
+    const neg = parseFloat(simNegRatio) || 0.25;
+    if (att > 0) {
+      const r = Math.max(0, att - wrg);
+      const net = Math.max(0, +(r - wrg * neg).toFixed(2));
+      setScored(net.toString());
+    }
+  };
+
+  const handleSimWrongChange = (val) => {
+    setSimWrong(val);
+    const att = parseFloat(simAttempt) || 0;
+    const wrg = parseFloat(val) || 0;
+    const neg = parseFloat(simNegRatio) || 0.25;
+    if (att > 0) {
+      const r = Math.max(0, att - wrg);
+      const net = Math.max(0, +(r - wrg * neg).toFixed(2));
+      setScored(net.toString());
+    }
+  };
+
+  const handleSimNegChange = (val) => {
+    setSimNegRatio(val);
+    const att = parseFloat(simAttempt) || 0;
+    const wrg = parseFloat(simWrong) || 0;
+    const neg = parseFloat(val) || 0.25;
+    if (att > 0) {
+      const r = Math.max(0, att - wrg);
+      const net = Math.max(0, +(r - wrg * neg).toFixed(2));
+      setScored(net.toString());
+    }
+  };
+
   // Test History filters
   const [histSubFilter, setHistSubFilter] = useState("ALL");
   const [histSortBy, setHistSortBy] = useState("latest");
@@ -646,6 +696,90 @@ export function AnalysisTab() {
               </div>
             </div>
           </form>
+
+          {/* NEW: NEGATIVE MARKING & CUT-OFF SIMULATOR + MISTAKE TRACKER */}
+          <div className="one-card p-4 space-y-3 border-l-4 border-l-rose-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-extrabold">🧮 Negative Marking & Cut-off Calculator</h2>
+                <p className="text-[10px] muted-text">0.25 / 0.33 નેગેટિવ માર્કિંગ ગણો અને સીધા ટેસ્ટ બોક્સમાં માર્ક્સ ભરો</p>
+              </div>
+              <span id="simNetScoreBadge" className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-indigo-600 text-white shadow-sm">
+                Net: {simNetScore.toFixed(2)}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              <div>
+                <label className="text-[9px] font-bold muted-text">Attempted</label>
+                <input
+                  type="number"
+                  placeholder="85"
+                  value={simAttempt}
+                  onChange={(e) => handleSimAttemptChange(e.target.value)}
+                  className="w-full theme-input px-2.5 py-1.5 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold muted-text">Wrong (ખોટા)</label>
+                <input
+                  type="number"
+                  placeholder="16"
+                  value={simWrong}
+                  onChange={(e) => handleSimWrongChange(e.target.value)}
+                  className="w-full theme-input px-2.5 py-1.5 text-xs font-bold text-rose-500"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold muted-text">Negative</label>
+                <select
+                  value={simNegRatio}
+                  onChange={(e) => handleSimNegChange(e.target.value)}
+                  className="w-full theme-input px-2 py-1.5 text-xs font-bold"
+                >
+                  <option value="0.25">-0.25</option>
+                  <option value="0.33">-0.33</option>
+                  <option value="0.50">-0.50</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold muted-text">Target Cut-off</label>
+                <input
+                  type="number"
+                  value={simCutoff}
+                  onChange={(e) => setSimCutoff(e.target.value)}
+                  className="w-full theme-input px-2.5 py-1.5 text-xs font-bold text-emerald-500"
+                />
+              </div>
+            </div>
+            <div className="subtle-pill p-2.5 text-[11px] font-semibold">
+              {simAttemptNum > 0 ? (
+                (() => {
+                  const gap = +(simCutoffNum - simNetScore).toFixed(2);
+                  const tukkaSaved = Math.ceil(gap / (1 + simNegNum));
+                  if (gap <= 0) {
+                    return (
+                      <div>
+                        <span className="text-emerald-500 font-extrabold">
+                          🏆 સુપર! તમે તમારા Target Cut-off ({simCutoffNum}) કરતા +{Math.abs(gap)} માર્ક્સ આગળ છો!
+                        </span>{" "}
+                        (સાચા: {simRightNum}, નેગેટિવ કપાત: -{simPenalty.toFixed(2)})
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div>
+                        ⚠️ સાચા: <b>{simRightNum}</b> | નેગેટિવ કપાત: <b className="text-rose-500">-{simPenalty.toFixed(2)}</b>. Cut-off ({simCutoffNum}) સુધી પહોંચવા <b>+{gap} માર્ક્સ</b> ઘટે છે. જો <b>{simWrongNum} ખોટામાંથી માત્ર {Math.min(simWrongNum, tukkaSaved)} પ્રશ્નો</b> સુધાર્યા હોત તો Cut-off પાર થઈ જાત!
+                      </div>
+                    );
+                  }
+                })()
+              ) : (
+                <span className="muted-text">
+                  ઉપર Attempted અને Wrong પ્રશ્નો નાખો એટલે તમારો Net Score અને Cut-off ગેપ દેખાશે.
+                </span>
+              )}
+            </div>
+          </div>
 
           {/* Test History */}
           <div className="one-card p-4 space-y-3">

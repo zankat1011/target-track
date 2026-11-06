@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { DailyCountdown } from "./DailyCountdown";
-import { KpiCards } from "./KpiCards";
+import { DailyHabits } from "./DailyHabits";
 import { DailyGoal } from "./DailyGoal";
 import { StudyLogger } from "./StudyLogger";
 import { DueRevisions } from "./DueRevisions";
@@ -9,17 +8,52 @@ import { useStudy } from "../../context/StudyContext";
 import { todayISO } from "../../utils/helpers";
 
 export function TodayTab({
-  onOpenMultiExam,
   onOpenExtraRev,
   onOpenQuickNotes,
   onOpenChapLock,
   onNavigateToSyllabus,
-  onKpiClick,
 }) {
   const { currentUser, updateCurrentUser } = useStudy();
   const [quickNoteText, setQuickNoteText] = useState("");
   const [quickNoteSub, setQuickNoteSub] = useState("General");
   const [quickNoteFilter, setQuickNoteFilter] = useState("ALL");
+  const [isListening, setIsListening] = useState(false);
+
+  const startVoiceDictation = async () => {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      return alert(
+        "🎙️ મોબાઈલ કીબોર્ડમાં રહેલા Google Mic (🎤) આઇકનનો ઉપયોગ કરો (આ WebView માં ડાયરેક્ટ માઈક બ્લોક છે)."
+      );
+    }
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } catch (e) {
+      return alert(
+        "⚠️ માઈક્રોફોન પરમિશન Allow કરો (બ્રાઉઝર URL બારની બાજુમાં 🔒 Lock આઇકન પર ક્લિક કરી Microphone ચાલુ કરો)."
+      );
+    }
+
+    try {
+      const rec = new SpeechRec();
+      rec.lang = "gu-IN";
+      rec.continuous = false;
+      rec.interimResults = false;
+      setIsListening(true);
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setQuickNoteText((prev) => (prev ? prev.trim() + " " : "") + transcript);
+      };
+      rec.onerror = () => setIsListening(false);
+      rec.onend = () => setIsListening(false);
+      rec.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
 
   const subjects = currentUser?.subjects || [];
   const quickNotes = currentUser?.quickNotes || [];
@@ -65,13 +99,10 @@ export function TodayTab({
 
   return (
     <div id="tab-today" className="space-y-3.5 anim-fade">
-      {/* 1. Daily Countdown Widget */}
-      <DailyCountdown onOpenMultiExam={onOpenMultiExam} />
+      {/* 0. Daily 3-Habit Checklist */}
+      <DailyHabits />
 
-      {/* 2. Top 4 Clickable KPI Cards */}
-      <KpiCards onKpiClick={onKpiClick} />
-
-      {/* 3. Daily Target Progress Bar */}
+      {/* 1. Daily Target Progress Bar */}
       <DailyGoal />
 
       {/* 4. Daily Study Logger */}
@@ -79,27 +110,6 @@ export function TodayTab({
         onOpenChapLock={onOpenChapLock}
         onNavigateToSyllabus={onNavigateToSyllabus}
       />
-
-      {/* 5. Formula & Notes Banner */}
-      <div className="one-card p-3.5 flex items-center justify-between gap-2 border-l-4 border-l-indigo-500">
-        <div onClick={onOpenQuickNotes} className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
-          <div className="w-9 h-9 rounded-2xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center font-extrabold text-base shrink-0">
-            🗂️
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs font-extrabold truncate">Notes & Formula Folders</div>
-            <div className="text-[10px] muted-text truncate">
-              {quickNotes.length} Saved Notes • Subject & Chapter Key Notes
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={onOpenQuickNotes}
-          className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold shadow-sm shrink-0 transition"
-        >
-          🔑 Formula & Key ➔
-        </button>
-      </div>
 
       {/* 6. Today's Due Revisions */}
       <DueRevisions onOpenExtraRev={onOpenExtraRev} />
@@ -145,13 +155,25 @@ export function TodayTab({
                 </option>
               ))}
             </select>
-            <input
-              type="text"
-              placeholder="સૂત્ર કે શોર્ટ નોંધ લખો..."
-              value={quickNoteText}
-              onChange={(e) => setQuickNoteText(e.target.value)}
-              className="col-span-2 theme-input px-3 py-2 text-xs"
-            />
+            <div className="col-span-2 flex gap-1.5">
+              <input
+                type="text"
+                placeholder="સૂત્ર કે શોર્ટ નોંધ લખો (અથવા 🎙️ માઈક વાપરો)..."
+                value={quickNoteText}
+                onChange={(e) => setQuickNoteText(e.target.value)}
+                className="flex-1 theme-input px-3 py-2 text-xs"
+              />
+              <button
+                type="button"
+                onClick={startVoiceDictation}
+                className={`subtle-pill px-2.5 rounded-xl flex items-center justify-center shrink-0 hover:border-indigo-500 ${
+                  isListening ? "ring-2 ring-rose-500 text-rose-500 animate-pulse" : ""
+                }`}
+                title="Voice Typing (Gujarati / English)"
+              >
+                🎙️
+              </button>
+            </div>
           </div>
           <button
             type="submit"

@@ -17,3 +17,12 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </ThemeProvider>
   </React.StrictMode>
 );
+
+// Register Service Worker for Real Offline Mode & PWA
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((err) => {
+      console.warn("SW registration skipped:", err);
+    });
+  });
+}
