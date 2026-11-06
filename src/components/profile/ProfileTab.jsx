@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useStudy } from "../../context/StudyContext";
 import { ClearDataModal } from "../common/ClearDataModal";
+import { LegalPolicyModal } from "../modals/LegalPolicyModal";
 import {
   todayISO,
   openAdminWhatsApp,
@@ -29,6 +30,10 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
 
   // Clear Data Modal State
   const [showClearModal, setShowClearModal] = useState(false);
+
+  // Legal Policy Modal State (Requirement 7)
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState("terms");
 
   // Notification State
   const [notifGranted, setNotifGranted] = useState(() => {
@@ -722,11 +727,49 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
         </div>
       </div>
 
+      {/* 8. Legal Policies & Rules (Requirement 7) */}
+      <div className="one-card p-4 space-y-2.5 text-center">
+        <h3 className="text-xs font-black uppercase muted-text">
+          📜 પ્લેટફોર્મ નિયમો & કાનૂની નીતિઓ (Legal Policies)
+        </h3>
+        <p className="text-[10px] muted-text leading-relaxed">
+          વિદ્યાર્થીઓ અને સેલર્સની સુરક્ષા તથા પારદર્શિતા માટે Target Track ની અધિકૃત માર્ગદર્શિકા:
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+          {[
+            { id: "terms", label: "📜 Terms of Service" },
+            { id: "refund", label: "💰 Refund Policy" },
+            { id: "pricing", label: "🏷️ Pricing Policy" },
+            { id: "disclaimer", label: "⚠️ Disclaimer" },
+            { id: "privacy", label: "🔒 Privacy Policy" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setLegalModalTab(item.id);
+                setLegalModalOpen(true);
+              }}
+              className="subtle-pill px-3 py-1.5 rounded-xl text-[10px] font-extrabold hover:border-indigo-500 hover:text-indigo-600 transition"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 2-Step Clear All Data Modal */}
       <ClearDataModal
         isOpen={showClearModal}
         onClose={() => setShowClearModal(false)}
         onConfirm={handleClearAllDataConfirm}
+      />
+
+      {/* Legal Policies Modal */}
+      <LegalPolicyModal
+        isOpen={legalModalOpen}
+        onClose={() => setLegalModalOpen(false)}
+        initialTab={legalModalTab}
       />
     </div>
   );

@@ -183,6 +183,8 @@ function loadLocalDB() {
         if (!Array.isArray(parsed.marketplaceOrders)) parsed.marketplaceOrders = [];
         if (!Array.isArray(parsed.marketplacePayouts)) parsed.marketplacePayouts = [];
         if (!Array.isArray(parsed.marketplaceSubscriptions)) parsed.marketplaceSubscriptions = [];
+        if (!Array.isArray(parsed.sellerApplications)) parsed.sellerApplications = [];
+        if (!Array.isArray(parsed.sellerTickets)) parsed.sellerTickets = [];
         return parsed;
       } catch (e) {}
     }
@@ -196,7 +198,9 @@ function loadLocalDB() {
     marketplaceBooks: DEFAULT_MARKETPLACE_BOOKS,
     marketplaceOrders: [],
     marketplacePayouts: [],
-    marketplaceSubscriptions: []
+    marketplaceSubscriptions: [],
+    sellerApplications: [],
+    sellerTickets: []
   };
 }
 
@@ -273,6 +277,16 @@ export function StudyProvider({ children }) {
           merged.marketplaceSubscriptions = cloudData.marketplaceSubscriptions;
         } else if (!merged.marketplaceSubscriptions) {
           merged.marketplaceSubscriptions = [];
+        }
+        if (Array.isArray(cloudData.sellerApplications)) {
+          merged.sellerApplications = cloudData.sellerApplications;
+        } else if (!merged.sellerApplications) {
+          merged.sellerApplications = [];
+        }
+        if (Array.isArray(cloudData.sellerTickets)) {
+          merged.sellerTickets = cloudData.sellerTickets;
+        } else if (!merged.sellerTickets) {
+          merged.sellerTickets = [];
         }
 
         const str = JSON.stringify(merged);

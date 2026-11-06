@@ -17,6 +17,7 @@ import {
   getValidityRemainingDays
 } from "../../utils/helpers";
 import { fetchRemoteStudentPin } from "../../services/firebase";
+import { LegalPolicyModal } from "../modals/LegalPolicyModal";
 
 export function AuthScreen({ onStartTour }) {
   const { session, login, logout, startDemo } = useAuth();
@@ -30,6 +31,9 @@ export function AuthScreen({ onStartTour }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(true);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState("terms");
 
   const cleanMobile = normalizeMobile(mobile);
   const isAdminMobile = cleanMobile === ADMIN_MOBILE;
@@ -45,6 +49,11 @@ export function AuthScreen({ onStartTour }) {
 
     if (cleanMobile.length !== 10) {
       setError("10 આંકડાનો મોબાઈલ નંબર નાખો.");
+      return;
+    }
+
+    if (!isAdminMobile && !termsAccepted) {
+      setError("કૃપા કરીને સેવાની શરતો અને નીતિઓ સ્વીકારો.");
       return;
     }
 
@@ -242,6 +251,77 @@ export function AuthScreen({ onStartTour }) {
               </div>
             )}
 
+            {/* Terms of Service & Privacy Policy Checkbox (Requirement 7) */}
+            {!isAdminMobile && (
+              <div className="flex items-start gap-2 pt-1 text-[11px] leading-snug">
+                <input
+                  type="checkbox"
+                  id="authTermsCheck"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 rounded accent-indigo-600 cursor-pointer w-4 h-4 shrink-0"
+                />
+                <label htmlFor="authTermsCheck" className="cursor-pointer muted-text select-none text-[10px]">
+                  હું Target Track ની{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab("terms");
+                      setLegalModalOpen(true);
+                    }}
+                    className="text-indigo-500 font-extrabold underline hover:text-indigo-700"
+                  >
+                    સેવાની શરતો
+                  </button>
+                  ,{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab("refund");
+                      setLegalModalOpen(true);
+                    }}
+                    className="text-indigo-500 font-extrabold underline hover:text-indigo-700"
+                  >
+                    રીફંડ
+                  </button>
+                  ,{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab("pricing");
+                      setLegalModalOpen(true);
+                    }}
+                    className="text-indigo-500 font-extrabold underline hover:text-indigo-700"
+                  >
+                    પ્રાઇસિંગ
+                  </button>
+                  ,{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab("disclaimer");
+                      setLegalModalOpen(true);
+                    }}
+                    className="text-indigo-500 font-extrabold underline hover:text-indigo-700"
+                  >
+                    ડિસ્ક્લેમર
+                  </button>{" "}
+                  અને{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab("privacy");
+                      setLegalModalOpen(true);
+                    }}
+                    className="text-indigo-500 font-extrabold underline hover:text-indigo-700"
+                  >
+                    પ્રાઈવસી પોલિસી
+                  </button>{" "}
+                  સાથે સંપૂર્ણ સહમત છું.
+                </label>
+              </div>
+            )}
+
             {error && <p className="text-xs text-rose-500 font-bold">{error}</p>}
 
             <button
@@ -354,6 +434,12 @@ export function AuthScreen({ onStartTour }) {
           </div>
         )}
       </div>
+
+      <LegalPolicyModal
+        isOpen={legalModalOpen}
+        onClose={() => setLegalModalOpen(false)}
+        initialTab={legalModalTab}
+      />
     </div>
   );
 }

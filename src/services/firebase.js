@@ -84,6 +84,20 @@ export async function saveCloudDatabase(db, currentSession, isDemoMode) {
           body: JSON.stringify(db.marketplaceSubscriptions || [])
         }), 3000);
       }
+      if (db.sellerApplications) {
+        await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp/sellerApplications.json", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(db.sellerApplications || [])
+        }), 3000);
+      }
+      if (db.sellerTickets) {
+        await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp/sellerTickets.json", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(db.sellerTickets || [])
+        }), 3000);
+      }
     } else {
       await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp.json", {
         method: "PUT",

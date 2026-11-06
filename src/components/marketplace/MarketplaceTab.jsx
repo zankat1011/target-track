@@ -1,15 +1,16 @@
 import React, { useState, useMemo } from "react";
 import { useStudy, DEFAULT_MARKETPLACE_BOOKS } from "../../context/StudyContext";
 import { useAuth } from "../../context/AuthContext";
-import { nowFormattedTimestamp } from "../../utils/helpers";
+import { nowFormattedTimestamp, openAdminWhatsApp } from "../../utils/helpers";
 import { ADMIN_MOBILE } from "../../utils/constants";
+import { LegalPolicyModal } from "../modals/LegalPolicyModal";
 
 export function MarketplaceTab({ onBackToSyllabus }) {
   const { db, commitDb, currentUser, triggerCelebration } = useStudy();
   const { session } = useAuth();
 
-  // Main Sub-Tabs: 'browse' | 'bundles' | 'wallet' | 'library'
-  const [activeSubTab, setActiveSubTab] = useState("browse");
+  // 3 Primary Tabs (Requirement 1: Combo integrated into store)
+  const [activeSubTab, setActiveSubTab] = useState("browse"); // 'browse' | 'wallet' | 'library'
   const [selectedExamFilter, setSelectedExamFilter] = useState("ALL");
   const [searchQ, setSearchQ] = useState("");
 
@@ -27,19 +28,38 @@ export function MarketplaceTab({ onBackToSyllabus }) {
   const [payoutModalOpen, setPayoutModalOpen] = useState(false);
   const [payoutAmountInput, setPayoutAmountInput] = useState("");
   const [payoutUpiInput, setPayoutUpiInput] = useState("");
-  const [vipUpgradeModalOpen, setVipUpgradeModalOpen] = useState(false);
-  const [vipUtrInput, setVipUtrInput] = useState("");
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState("terms");
 
-  // Sell form states
+  // 2-Step Order Delete States (Requirement 6)
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [deleteStep, setDeleteStep] = useState(1); // 1 or 2
+  const [deleteVerifyText, setDeleteVerifyText] = useState("");
+
+  // Seller Onboarding Application Form States (Requirement 2)
+  const [applyName, setApplyName] = useState(currentUser?.name || "");
+  const [applyCity, setApplyCity] = useState("");
+  const [applyExamExp, setApplyExamExp] = useState("CCE Topper / Ranker");
+  const [applyQualification, setApplyQualification] = useState("");
+  const [applyUpi, setApplyUpi] = useState("");
+  const [applyBio, setApplyBio] = useState("");
+  const [applySampleProof, setApplySampleProof] = useState("");
+  const [applyTermsCheck, setApplyTermsCheck] = useState(false);
+
+  // Dynamic Multi-Book Bundle Form States (Requirement 3 & 5)
   const [sellTitle, setSellTitle] = useState("");
   const [sellExam, setSellExam] = useState("CCE (Group A & B)");
   const [sellSubject, setSellSubject] = useState("");
   const [sellType, setSellType] = useState("Handwritten Notes");
   const [sellIsBundle, setSellIsBundle] = useState(false);
-  const [sellBundleItemsText, setSellBundleItemsText] = useState("");
+  const [bundleBooksList, setBundleBooksList] = useState([
+    { title: "પુસ્તક ૧: ગણિત શોર્ટકટ્સ", pages: 120, fileData: "", fileName: "" },
+    { title: "પુસ્તક ૨: રીઝનિંગ માસ્ટર બુક", pages: 140, fileData: "", fileName: "" },
+  ]);
   const [sellOriginalPrice, setSellOriginalPrice] = useState(99);
   const [sellOfferPrice, setSellOfferPrice] = useState(49);
   const [sellPlanChoice, setSellPlanChoice] = useState("commission_10"); // 'commission_10' | 'fixed_500'
+  const [sellVipUtr, setSellVipUtr] = useState("");
   const [sellTotalPages, setSellTotalPages] = useState(100);
   const [sellSamplePages, setSellSamplePages] = useState(5);
   const [sellDemoText, setSellDemoText] = useState("");
@@ -51,6 +71,10 @@ export function MarketplaceTab({ onBackToSyllabus }) {
   const [sellUpi, setSellUpi] = useState("");
   const [sellBio, setSellBio] = useState("");
 
+  // Seller Support States (Requirement 4)
+  const [supportCategory, setSupportCategory] = useState("💸 પેઆઉટ / વૉલેટ ઉપાડ સંબંધિત પ્રશ્ન");
+  const [supportMsg, setSupportMsg] = useState("");
+
   // All Books with fallback
   const books = useMemo(() => {
     if (Array.isArray(db.marketplaceBooks) && db.marketplaceBooks.length > 0) {
@@ -61,22 +85,35 @@ export function MarketplaceTab({ onBackToSyllabus }) {
 
   const orders = db.marketplaceOrders || [];
   const payouts = db.marketplacePayouts || [];
-  const subscriptions = db.marketplaceSubscriptions || [];
+  const applications = db.sellerApplications || [];
+  const sellerTickets = db.sellerTickets || [];
 
   const userMobile = currentUser?.mobile || session?.mobile || "";
 
-  // Check if current user has an active ₹500 3-Month VIP Plan
-  const activeUserSubscription = useMemo(() => {
-    return subscriptions.find(
-      (s) => s.sellerMobile === userMobile && s.status === "active"
-    );
-  }, [subscriptions, userMobile]);
+  // Check Current User's Seller Verification Status (Requirement 2)
+  const mySellerApplication = useMemo(() => {
+    return applications.find((a) => a.applicantMobile === userMobile);
+  }, [applications, userMobile]);
 
-  // Filter approved & live books for marketplace browsing
+  const isSellerApproved = useMemo(() => {
+    // Admin or approved applicant or default topper mobile
+    if (session?.role === "admin") return true;
+    if (mySellerApplication && mySellerApplication.status === "Approved") return true;
+    // If student has existing approved books in the system
+    return books.some((b) => b.sellerMobile === userMobile && b.status === "Approved");
+  }, [session, mySellerApplication, books, userMobile]);
+
+  // Filter approved & live books for marketplace browsing (Requirement 1: Combos inside store)
   const liveBooks = useMemo(() => {
     return books.filter((b) => {
       const isApproved = b.status === "Approved";
-      const matchExam = selectedExamFilter === "ALL" || b.exam === selectedExamFilter;
+      let matchExam = true;
+      if (selectedExamFilter === "COMBOS") {
+        matchExam = b.isBundle === true;
+      } else if (selectedExamFilter !== "ALL") {
+        matchExam = b.exam === selectedExamFilter;
+      }
+
       const q = searchQ.trim().toLowerCase();
       const matchQ =
         !q ||
@@ -88,10 +125,10 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     });
   }, [books, selectedExamFilter, searchQ]);
 
-  // Special Bundle packs
-  const bundleBooks = useMemo(() => {
-    return liveBooks.filter((b) => b.isBundle);
-  }, [liveBooks]);
+  // Featured combo bundles
+  const featuredCombos = useMemo(() => {
+    return books.filter((b) => b.status === "Approved" && b.isBundle);
+  }, [books]);
 
   // My listings and my purchases
   const myListings = useMemo(() => {
@@ -117,31 +154,28 @@ export function MarketplaceTab({ onBackToSyllabus }) {
   }, [myVerifiedOrders]);
 
   // ============================================================
-  // SELLER WALLET CALCULATIONS (Requirement 1, 3 & 8)
+  // SELLER WALLET CALCULATIONS (Requirement 5, 8 & 9)
   // ============================================================
   const sellerWalletStats = useMemo(() => {
-    // Orders of books sold by this seller
     const sellerSoldOrders = orders.filter(
       (o) => o.sellerMobile === userMobile && o.status === "Verified"
     );
 
-    // Total gross sales and net earnings
     let totalGrossSales = 0;
     let totalNetEarnings = 0;
 
     sellerSoldOrders.forEach((ord) => {
       const price = Number(ord.bookPrice) || 0;
       totalGrossSales += price;
-      // If seller has active VIP subscription, 0% commission (100% net)
+      // Per-book VIP plan applied check (Requirement 5)
       if (ord.sellerPlanApplied === "fixed_500") {
-        totalNetEarnings += price;
+        totalNetEarnings += price; // 100% net earnings
       } else {
         const adminFee = Math.round(price * 0.1);
-        totalNetEarnings += price - adminFee;
+        totalNetEarnings += price - adminFee; // 90% net earnings
       }
     });
 
-    // Payout requests calculations
     let totalPaidOut = 0;
     let totalPendingPayout = 0;
     let totalReversed = 0;
@@ -157,7 +191,6 @@ export function MarketplaceTab({ onBackToSyllabus }) {
       }
     });
 
-    // Available balance = Net Earnings - (Paid Out + Pending)
     const availableBalance = Math.max(
       0,
       totalNetEarnings - (totalPaidOut + totalPendingPayout)
@@ -174,62 +207,13 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     };
   }, [orders, myPayouts, userMobile]);
 
-  // File Upload Handlers (FileReader Base64 for local storage)
-  const handleCoverUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      return alert("કવર ફોટો ૨ MB કરતા નાનો હોવો જોઈએ.");
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setSellCoverImage(ev.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleDemoPagesUpload = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    if (files.length > 6) {
-      alert("મહત્તમ ૬ ડેમો ફોટા અપલોડ કરી શકાય છે.");
-    }
-    const validFiles = files.slice(0, 6);
-    const newDemoUrls = [];
-    let processed = 0;
-
-    validFiles.forEach((f) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        newDemoUrls.push(ev.target.result);
-        processed++;
-        if (processed === validFiles.length) {
-          setSellDemoImages((prev) => [...prev, ...newDemoUrls].slice(0, 8));
-        }
-      };
-      reader.readAsDataURL(f);
-    });
-  };
-
-  const handleDirectPdfUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSellDirectFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setSellDirectFileData(ev.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Direct Book File Downloader (Requirement 2 & 7)
-  const handleDownloadBookPdf = (order) => {
+  // Direct Book File Downloader (Max 2 Downloads)
+  const handleDownloadBookPdf = (order, itemIdx = null) => {
     const currentCount = Number(order.downloadCount || 0);
 
-    // Limit check: Max 2 Downloads Allowed
     if (currentCount >= 2) {
       return alert(
-        "🔒 ડાઉનલોડ મર્યાદા સમાપ્ત!\nતમે આ પુસ્તક મહત્તમ ૨ વખત ડાઉનલોડ કરી લીધું છે (2/2 Downloads Used).\nસુરક્ષાના નિયમો મુજબ લિંક એક્સપાયર થઈ ગઈ છે."
+        "🔒 ડાઉનલોડ મર્યાદા સમાપ્ત!\nતમે આ પુસ્તક મહત્તમ ૨ વખત ડાઉનલોડ કરી લીધું છે (2/2 વપરાયેલ).\nસુરક્ષાના નિયમો મુજબ લિંક એક્સપાયર થઈ ગઈ છે."
       );
     }
 
@@ -241,9 +225,17 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     );
     commitDb({ ...db, marketplaceOrders: nextOrders });
 
-    // Native file download directly from website (Base64 data or fallback link)
-    const fileData = order.fileData || order.downloadUrl;
-    const cleanTitle = (order.bookTitle || "Target_Notes")
+    // Multi-book bundle item or single book
+    let fileData = order.fileData || order.downloadUrl;
+    let fileNameTitle = order.bookTitle || "Target_Notes";
+
+    if (itemIdx !== null && order.bundleFiles && order.bundleFiles[itemIdx]) {
+      const subItem = order.bundleFiles[itemIdx];
+      fileData = subItem.fileData || fileData;
+      fileNameTitle = subItem.title || fileNameTitle;
+    }
+
+    const cleanTitle = fileNameTitle
       .replace(/[^a-zA-Z0-9\s]/g, "")
       .trim()
       .slice(0, 30);
@@ -260,14 +252,14 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     } else {
       const blob = new Blob(
         [
-          `TARGET TRACK TOPPER STUDY MATERIAL\n\nTitle: ${order.bookTitle}\nExam: ${order.bookExam || "General"}\nSubject: ${order.bookSubject || "General"}\nInvoice: ${order.invoiceNo}\nDownloaded: ${nowFormattedTimestamp()}\n\nAuthorized for Student: ${order.buyerName} (${order.buyerMobile})\nTarget Track Copyright © All Rights Reserved.`,
+          `TARGET TRACK TOPPER STUDY MATERIAL\n\nTitle: ${fileNameTitle}\nInvoice: ${order.invoiceNo}\nDownloaded: ${nowFormattedTimestamp()}\nAuthorized Student: ${order.buyerName} (${order.buyerMobile})\nTarget Track Copyright © All Rights Reserved.`,
         ],
         { type: "text/plain;charset=utf-8" }
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${cleanTitle}_Handwritten_Notes.txt`;
+      a.download = `${cleanTitle}_Notes.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -280,34 +272,117 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     );
   };
 
-  // Submit New Book / Bundle for Sale
+  // 2-Step Verified Order Delete (Requirement 6)
+  const handleConfirmDeleteOrder = () => {
+    if (!orderToDelete) return;
+    if (deleteVerifyText.trim().toUpperCase() !== "DELETE") {
+      return alert("પુષ્ટિ કરવા માટે ખાનામાં બરાબર 'DELETE' લખો.");
+    }
+
+    const nextOrders = orders.filter((o) => o.id !== orderToDelete.id);
+    commitDb({ ...db, marketplaceOrders: nextOrders });
+
+    setOrderToDelete(null);
+    setDeleteStep(1);
+    setDeleteVerifyText("");
+    triggerCelebration("🗑️ ઓર્ડર હિસ્ટ્રી ડિલીટ થઈ", "ઓર્ડર લિસ્ટમાંથી સફળતાપૂર્વક હટાવી દીધો.");
+  };
+
+  // Submit Seller Verification Application (Requirement 2 & 7)
+  const handleSubmitSellerApplication = (e) => {
+    e.preventDefault();
+    if (!applyName.trim()) return alert("કૃપા કરીને પૂરું નામ લખો.");
+    if (!applyCity.trim()) return alert("કૃપા કરીને તમારું શહેર અથવા જિલ્લો લખો.");
+    if (!applyUpi.trim()) return alert("કૃપા કરીને તમારું UPI ID લખો.");
+    if (!applyTermsCheck) {
+      return alert("સેલર બનવા માટે કૃપા કરીને સેલર નિયમો અને નીતિઓ સ્વીકારો.");
+    }
+
+    const newApp = {
+      id: `sell_app_${Date.now()}`,
+      applicantMobile: userMobile,
+      applicantName: applyName.trim(),
+      city: applyCity.trim(),
+      examExperience: applyExamExp.trim(),
+      qualification: applyQualification.trim(),
+      upiId: applyUpi.trim(),
+      bio: applyBio.trim() || "Target Track Verified Contributor",
+      status: "Pending", // 24 to 36 hours review
+      appliedAt: nowFormattedTimestamp(),
+      approvedAt: "",
+      rejectedAt: "",
+    };
+
+    const nextDb = {
+      ...db,
+      sellerApplications: [newApp, ...(db.sellerApplications || [])],
+    };
+    commitDb(nextDb);
+
+    triggerCelebration(
+      "📋 સેલર અરજી સબમિટ થઈ!",
+      "અમારી એડમિન ટીમ ૨૪ થી ૩૬ કલાકમાં વિગતો ચકાસીને એકાઉન્ટ મંજૂર કરશે."
+    );
+  };
+
+  // Dynamic Bundle Handlers (Requirement 3)
+  const handleAddBundleBook = () => {
+    setBundleBooksList((prev) => [
+      ...prev,
+      {
+        title: `પુસ્તક ${prev.length + 1}: નવો વિષય`,
+        pages: 100,
+        fileData: "",
+        fileName: "",
+      },
+    ]);
+  };
+
+  const handleRemoveBundleBook = (idx) => {
+    if (bundleBooksList.length <= 1) return alert("બંડલમાં ઓછામાં ઓછું ૧ પુસ્તક હોવું જરૂરી છે.");
+    setBundleBooksList((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleUpdateBundleBook = (idx, field, val) => {
+    setBundleBooksList((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, [field]: val } : item))
+    );
+  };
+
+  const handleBundlePdfUpload = (idx, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      handleUpdateBundleBook(idx, "fileData", ev.target.result);
+      handleUpdateBundleBook(idx, "fileName", file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Submit New Book or Bundle with Per-Book Pricing Plan (Requirement 3 & 5)
   const handlePublishBook = (e) => {
     e.preventDefault();
-    if (!sellTitle.trim()) return alert("કૃપા કરીને બુક કે નોટ્સનું શીર્ષક લખો.");
+    if (!sellTitle.trim()) return alert("કૃપા કરીને પુસ્તકનું શીર્ષક લખો.");
     if (!sellSubject.trim()) return alert("કૃપા કરીને વિષયનું નામ લખો.");
     const offerNum = Math.max(20, Math.round(Number(sellOfferPrice) || 20));
     const origNum = Math.max(offerNum, Math.round(Number(sellOriginalPrice) || offerNum));
-    if (!sellUpi.trim()) return alert("તમારી કમાણી (Payout) મેળવવા માટે UPI ID ફરજિયાત છે.");
+    if (!sellUpi.trim()) return alert("કમાણી મેળવવા માટે UPI ID ફરજિયાત છે.");
 
-    // Direct PDF or link required
-    if (!sellDirectFileData && !sellFullUrlBackup.trim()) {
+    // VIP Plan Per-Book verification (Requirement 5)
+    if (sellPlanChoice === "fixed_500" && !sellVipUtr.trim()) {
       return alert(
-        "કૃપા કરીને વેબસાઈટ પરથી ડાઉનલોડ થાય તે માટે સીધી PDF ફાઈલ અપલોડ કરો અથવા Cloud લિંક આપો."
+        "આ પુસ્તક પર 0% કમિશન પ્લાન સક્રિય કરવા માટે ₹500 ટ્રાન્સફરનો 12 આંકડાનો UTR નંબર દાખલ કરો."
       );
     }
 
-    // Determine plan: active VIP plan gives 0% commission, otherwise 10%
-    const isVip = activeUserSubscription || sellPlanChoice === "fixed_500";
-    const commissionPct = isVip ? 0 : 10;
+    const isPerBookVip = sellPlanChoice === "fixed_500";
+    const commissionPct = isPerBookVip ? 0 : 10;
     const adminCommission = Math.round(offerNum * (commissionPct / 100));
     const sellerPayout = offerNum - adminCommission;
 
     let bundleItemsArray = [];
-    if (sellIsBundle && sellBundleItemsText.trim()) {
-      bundleItemsArray = sellBundleItemsText
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
+    if (sellIsBundle) {
+      bundleItemsArray = bundleBooksList.map((b) => `${b.title} (${b.pages} પેજ)`);
     }
 
     const newBook = {
@@ -323,24 +398,27 @@ export function MarketplaceTab({ onBackToSyllabus }) {
       type: sellType,
       isBundle: sellIsBundle,
       bundleItems: bundleItemsArray,
+      bundleFiles: sellIsBundle ? bundleBooksList : null,
       originalPrice: origNum,
       price: offerNum,
-      sellerPlan: isVip ? "fixed_500" : "commission_10",
+      sellerPlan: sellPlanChoice, // 'commission_10' or 'fixed_500' (per-book!)
+      vipPlanUtr: sellVipUtr.trim() || null,
       adminCommissionPct: commissionPct,
       adminFee: adminCommission,
       sellerPayout: sellerPayout,
-      totalPages: Number(sellTotalPages) || 50,
+      totalPages: sellIsBundle
+        ? bundleBooksList.reduce((acc, b) => acc + (Number(b.pages) || 0), 0)
+        : Number(sellTotalPages) || 50,
       samplePagesCount: Number(sellSamplePages) || 5,
       coverImage:
         sellCoverImage ||
         "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80",
       demoImages: sellDemoImages,
       sampleDemoText: sellDemoText.trim(),
-      sampleDemoUrl: "",
       fileData: sellDirectFileData || "",
       fileName: sellDirectFileName || "Book_Notes.pdf",
       fullDownloadUrl: sellFullUrlBackup.trim() || "",
-      status: "Pending", // Review required by Admin
+      status: "Pending", // Admin review required
       createdAt: nowFormattedTimestamp(),
       salesCount: 0,
       rating: 5.0,
@@ -354,15 +432,14 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     commitDb(nextDb);
 
     triggerCelebration(
-      "📤 લિસ્ટિંગ સબમિટ થયું!",
-      "એડમિન દ્વારા ચકાસીને ૨૪ કલાકમાં લાઈવ કરવામાં આવશે."
+      "📤 લિસ્ટિંગ રિવ્યૂ માટે મોકલાઈ ગયું!",
+      "એડમિન દ્વારા ૨૪ થી ૩૬ કલાકમાં ચકાસીને લાઈવ કરવામાં આવશે."
     );
 
     // Reset Form
     setSellTitle("");
     setSellSubject("");
     setSellIsBundle(false);
-    setSellBundleItemsText("");
     setSellDemoText("");
     setSellCoverImage("");
     setSellDemoImages([]);
@@ -370,7 +447,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     setSellDirectFileName("");
     setSellFullUrlBackup("");
     setSellUpi("");
-    setSellBio("");
+    setSellVipUtr("");
     setActiveSubTab("wallet");
   };
 
@@ -383,8 +460,8 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     setCheckoutSubmitting(true);
     const invoiceNum = `TT-INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const isSellerVip = checkoutBook.sellerPlan === "fixed_500";
-    const adminCommission = isSellerVip ? 0 : Math.round(checkoutBook.price * 0.1);
+    const isBookVip = checkoutBook.sellerPlan === "fixed_500";
+    const adminCommission = isBookVip ? 0 : Math.round(checkoutBook.price * 0.1);
     const sellerPayout = checkoutBook.price - adminCommission;
 
     const newOrder = {
@@ -404,12 +481,13 @@ export function MarketplaceTab({ onBackToSyllabus }) {
       buyerMobile: userMobile,
       buyerName: currentUser?.name || "Student Buyer",
       buyerUtr: utrInput.trim().replace(/\s+/g, ""),
-      status: "Pending Verification", // Admin will verify UTR & payment
+      status: "Pending Verification",
       sellerPayoutStatus: "Pending",
-      downloadCount: 0, // Max 2 downloads permitted
+      downloadCount: 0,
       createdAt: nowFormattedTimestamp(),
       verifiedAt: "",
       fileData: checkoutBook.fileData || "",
+      bundleFiles: checkoutBook.bundleFiles || null,
       downloadUrl: checkoutBook.fullDownloadUrl || "",
     };
 
@@ -431,7 +509,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     setActiveSubTab("library");
   };
 
-  // Handle Weekly Payout Request Submission (Requirement 1)
+  // Handle Weekly Payout Request Submission (Requirement 8 & 9: Clean Language)
   const handleSubmitPayoutRequest = (e) => {
     e.preventDefault();
     const reqAmt = Number(payoutAmountInput);
@@ -449,7 +527,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
       sellerName: currentUser?.name || "Seller",
       upiId: payoutUpiInput.trim(),
       amount: reqAmt,
-      status: "Pending", // 'Pending' | 'Paid' | 'Reversed'
+      status: "Pending",
       requestedAt: nowFormattedTimestamp(),
       paidAt: "",
       adminUtr: "",
@@ -466,82 +544,36 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     setPayoutModalOpen(false);
     setPayoutAmountInput("");
     triggerCelebration(
-      "💰 પેઆઉટ વિનંતી સબમિટ થઈ!",
-      "એડમિન દ્વારા વેરિફાય કરીને રકમ તમારા UPI ખાતામાં જમા કરવામાં આવશે."
+      "💰 પેઆઉટ વિનંતી સફળ!",
+      "એડમિન દ્વારા વેરિફાય કરીને રકમ તમારા બેંક ખાતામાં જમા કરવામાં આવશે."
     );
   };
 
-  // Handle Buyer Rating & Review Submission (Requirement 6)
-  const handleSubmitRatingReview = (e) => {
+  // Submit Seller Support Ticket (Requirement 4)
+  const handleSubmitSellerTicket = (e) => {
     e.preventDefault();
-    if (!reviewOrderToRate) return;
+    if (!supportMsg.trim()) return alert("કૃપા કરીને તમારો પ્રશ્ન કે સમસ્યા લખો.");
 
-    const newReview = {
-      id: `rev_${Date.now()}`,
-      studentMobile: userMobile,
-      studentName: currentUser?.name || "Verified Buyer",
-      rating: Number(ratingStars),
-      comment: ratingComment.trim(),
-      date: nowFormattedTimestamp(),
-      hidden: false,
-    };
-
-    const nextBooks = books.map((b) => {
-      if (b.id === reviewOrderToRate.bookId) {
-        const existingReviews = b.ratings || [];
-        const updatedReviews = [newReview, ...existingReviews];
-        const avg = (
-          updatedReviews.reduce((sum, r) => sum + Number(r.rating || 5), 0) /
-          updatedReviews.length
-        ).toFixed(1);
-        return {
-          ...b,
-          rating: Number(avg),
-          ratings: updatedReviews,
-        };
-      }
-      return b;
-    });
-
-    commitDb({ ...db, marketplaceBooks: nextBooks });
-    setReviewOrderToRate(null);
-    setRatingComment("");
-    triggerCelebration("⭐ રેટિંગ સબમિટ થયું!", "તમારો રિવ્યૂ સફળતાપૂર્વક ઉમેરાઈ ગયો છે.");
-  };
-
-  // Handle ₹500 3-Month Plan VIP Upgrade Request (Requirement 8)
-  const handleRequestVipUpgrade = (e) => {
-    e.preventDefault();
-    if (!vipUtrInput.trim()) {
-      return alert("કૃપા કરીને Google Pay / PhonePe માંથી ₹500 ટ્રાન્સફરનો 12 આંકડાનો UTR દાખલ કરો.");
-    }
-
-    const newSub = {
-      id: `sub_${Date.now()}`,
+    const newTicket = {
+      id: `ticket_${Date.now()}`,
       sellerMobile: userMobile,
-      sellerName: currentUser?.name || "VIP Seller",
-      plan: "fixed_500",
-      planName: "૩ મહિના અનલિમિટેડ સેલિંગ (0% કમિશન)",
-      price: 500,
-      utr: vipUtrInput.trim(),
-      status: "Pending Verification", // Admin will activate
-      requestedAt: nowFormattedTimestamp(),
-      activatedAt: "",
-      expiresAt: "",
+      sellerName: currentUser?.name || "Seller",
+      category: supportCategory,
+      message: supportMsg.trim(),
+      status: "Pending",
+      createdAt: nowFormattedTimestamp(),
+      adminReply: "",
+      repliedAt: "",
     };
 
     const nextDb = {
       ...db,
-      marketplaceSubscriptions: [newSub, ...(db.marketplaceSubscriptions || [])],
+      sellerTickets: [newTicket, ...(db.sellerTickets || [])],
     };
     commitDb(nextDb);
 
-    setVipUpgradeModalOpen(false);
-    setVipUtrInput("");
-    triggerCelebration(
-      "👑 VIP સેલર વિનંતી મોકલાઈ ગઈ!",
-      "એડમિન વેરિફિકેશન બાદ ૩ મહિના માટે ૦% કમિશન પ્લાન શરૂ થશે."
-    );
+    setSupportMsg("");
+    triggerCelebration("📩 સપોર્ટ ટિકિટ મોકલાઈ!", "એડમિન ટૂંક સમયમાં તમને જવાબ આપશે.");
   };
 
   return (
@@ -561,14 +593,14 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-white">
                   LIVE
                 </span>
-                {activeUserSubscription && (
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">
-                    👑 VIP 0%
+                {isSellerApproved && (
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500 text-white">
+                    ✓ Verified Seller
                   </span>
                 )}
               </div>
               <p className="text-xs muted-text font-medium mt-0.5">
-                ગુજરાતના શ્રેષ્ઠ ટોપર્સની નોટ્સ ખરીદો અથવા તમારી નોટ્સ વેચીને વૉલેટમાં કમાણી કરો
+                ગુજરાતના શ્રેષ્ઠ ટોપર્સની નોટ્સ અને ઑફર્સ એક જ સ્થળે • સીધું વૉલેટમાં સાપ્તાહિક પેઆઉટ
               </p>
             </div>
           </div>
@@ -584,49 +616,37 @@ export function MarketplaceTab({ onBackToSyllabus }) {
           )}
         </div>
 
-        {/* 4 Main Action Sub-Tabs (Requirement 4: Mobile First Navigation) */}
+        {/* 3 Main Action Sub-Tabs (Requirement 1: Combos merged into Store) */}
         <div
           className="flex items-center justify-between gap-2 pt-2 border-t overflow-x-auto no-scrollbar"
           style={{ borderColor: "var(--border-col)" }}
         >
-          <div className="grid grid-cols-4 gap-1.5 w-full sm:w-auto sm:flex sm:gap-2">
+          <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:flex sm:gap-2">
             <button
               onClick={() => setActiveSubTab("browse")}
-              className={`px-3 py-2 rounded-2xl text-[11px] sm:text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
                 activeSubTab === "browse"
                   ? "bg-indigo-600 text-white shadow-md"
                   : "subtle-pill hover:border-indigo-500"
               }`}
             >
               <span>🛍️</span>
-              <span>બુક સ્ટોર</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold hidden sm:inline">
+              <span>બુક સ્ટોર & ઑફર્સ</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold hidden sm:inline">
                 {liveBooks.length}
               </span>
             </button>
 
             <button
-              onClick={() => setActiveSubTab("bundles")}
-              className={`px-3 py-2 rounded-2xl text-[11px] sm:text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
-                activeSubTab === "bundles"
-                  ? "bg-purple-600 text-white shadow-md"
-                  : "subtle-pill hover:border-purple-500"
-              }`}
-            >
-              <span>📦</span>
-              <span>બંડલ્સ & ઑફર્સ</span>
-            </button>
-
-            <button
               onClick={() => setActiveSubTab("wallet")}
-              className={`px-3 py-2 rounded-2xl text-[11px] sm:text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
                 activeSubTab === "wallet"
                   ? "bg-emerald-600 text-white shadow-md"
                   : "subtle-pill hover:border-emerald-500"
               }`}
             >
               <span>💼</span>
-              <span>સેલર વૉલેટ</span>
+              <span>સેલર હબ & વૉલેટ</span>
               {sellerWalletStats.availableBalance > 0 && (
                 <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 font-extrabold">
                   ₹{sellerWalletStats.availableBalance}
@@ -636,7 +656,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
 
             <button
               onClick={() => setActiveSubTab("library")}
-              className={`px-3 py-2 rounded-2xl text-[11px] sm:text-xs font-black transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
                 activeSubTab === "library"
                   ? "bg-indigo-600 text-white shadow-md"
                   : "subtle-pill hover:border-indigo-500"
@@ -644,29 +664,82 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             >
               <span>📂</span>
               <span>મારી ખરીદી</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold hidden sm:inline">
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold hidden sm:inline">
                 {myVerifiedOrders.length}
               </span>
             </button>
           </div>
 
           <div className="hidden lg:flex items-center gap-1.5 text-[11px] font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-xl shrink-0">
-            <span>🛡️ ૧૦% કમિશન પ્લાન અથવા ₹૫૦૦ માં ૩ મહિના ૦% કમિશન!</span>
+            <span>🛡️ ૧૦% કમિશન અથવા બુક-વાઇઝ ₹૫૦૦ માં 0% કમિશન VIP પ્લાન</span>
           </div>
         </div>
       </div>
 
       {/* ============================================================ */}
-      {/* 1. VIEW: BROWSE ALL BOOKS                                    */}
+      {/* 1. VIEW: BROWSE ALL BOOKS & INTEGRATED COMBOS (Req 1)        */}
       {/* ============================================================ */}
       {activeSubTab === "browse" && (
         <div className="space-y-4 anim-fade">
-          {/* Search & Exam Filter Chips */}
+          {/* Integrated Hot Combos Banner (Requirement 1) */}
+          {featuredCombos.length > 0 && (
+            <div className="one-card p-4 bg-gradient-to-r from-purple-500/15 via-indigo-500/10 to-teal-500/10 border-2 border-purple-500/40 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🔥</span>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-purple-600 dark:text-purple-400">
+                      ટોપર્સ સ્પેશિયલ કોમ્બો બંડલ્સ (મોટી બચત)
+                    </h3>
+                    <p className="text-[10px] muted-text">એક જ પેકમાં ૩ થી ૪ વિષયોની સંપૂર્ણ નોટ્સ ૫૦% સુધી ડિસ્કાઉન્ટ સાથે</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-500 text-white shrink-0">
+                  {featuredCombos.length} કોમ્બો લાઈવ
+                </span>
+              </div>
+
+              {/* Horizontal Scrollable Combo Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {featuredCombos.slice(0, 2).map((cb) => (
+                  <div key={cb.id} className="subtle-pill p-3 space-y-2 border-l-4 border-l-purple-500">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-black text-xs text-purple-600 dark:text-purple-400">
+                        {cb.title}
+                      </span>
+                      <span className="text-sm font-black text-emerald-500 shrink-0">₹{cb.price}</span>
+                    </div>
+                    {cb.bundleItems && (
+                      <div className="text-[10px] muted-text">
+                        શામેલ: {cb.bundleItems.slice(0, 2).join(" + ")} {cb.bundleItems.length > 2 && "..."}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        onClick={() => setPreviewBook(cb)}
+                        className="text-[10px] font-bold text-indigo-500 underline"
+                      >
+                        ડેમો સેમ્પલ જુઓ
+                      </button>
+                      <button
+                        onClick={() => { setCheckoutBook(cb); setUtrInput(""); }}
+                        className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-black shadow-xs"
+                      >
+                        કોમ્બો ખરીદો ₹{cb.price}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search & Exam Filter Chips (Includes "🔥 કોમ્બો & ઑફર્સ") */}
           <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
             <div className="relative flex-1">
               <input
                 type="text"
-                placeholder="વિષય, પુસ્તક અથવા ટોપરનું નામ શોધો (દા.ત. રીઝનિંગ, ઈતિહાસ, બંધારણ)..."
+                placeholder="પુસ્તક, વિષય અથવા ટોપરનું નામ શોધો..."
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
                 className="w-full theme-input pl-9 pr-3 py-2.5 text-xs font-semibold"
@@ -675,17 +748,23 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
-              {["ALL", "CCE (Group A & B)", "GPSC Class 1-2", "Police PSI / Constable", "General / Other"].map((ex) => (
+              {[
+                { id: "ALL", label: "બધા પુસ્તકો" },
+                { id: "COMBOS", label: "🔥 કોમ્બો બંડલ્સ" },
+                { id: "CCE (Group A & B)", label: "CCE" },
+                { id: "GPSC Class 1-2", label: "GPSC" },
+                { id: "Police PSI / Constable", label: "PSI / Constable" },
+              ].map((ex) => (
                 <button
-                  key={ex}
-                  onClick={() => setSelectedExamFilter(ex)}
+                  key={ex.id}
+                  onClick={() => setSelectedExamFilter(ex.id)}
                   className={`px-3 py-2 rounded-xl text-[10px] font-extrabold whitespace-nowrap transition ${
-                    selectedExamFilter === ex
+                    selectedExamFilter === ex.id
                       ? "bg-indigo-600 text-white shadow-xs"
                       : "subtle-pill hover:border-indigo-500"
                   }`}
                 >
-                  {ex === "ALL" ? "બધી કેટેગરીઝ" : ex}
+                  {ex.label}
                 </button>
               ))}
             </div>
@@ -705,7 +784,6 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                   key={book.id}
                   className="one-card p-4 space-y-3 flex flex-col justify-between border-2 hover:border-indigo-500/50 transition group shadow-xs relative overflow-hidden"
                 >
-                  {/* Top Badges */}
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-wrap gap-1">
@@ -714,7 +792,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                         </span>
                         {book.isBundle && (
                           <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-purple-500/15 text-purple-500">
-                            🔥 કોમ્બો બંડલ
+                            🔥 કોમ્બો પેક
                           </span>
                         )}
                         {discountPct > 0 && (
@@ -778,11 +856,10 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                       </span>
                     </div>
 
-                    {/* Clickable Seller Profile link */}
+                    {/* Seller Link */}
                     <div
                       onClick={() => setSellerProfileToView(book)}
                       className="text-[10px] subtle-pill px-2.5 py-1 text-slate-600 dark:text-slate-300 font-semibold flex items-center justify-between cursor-pointer hover:border-indigo-500 transition"
-                      title="સેલર પ્રોફાઇલ અને અન્ય નોટ્સ જુઓ"
                     >
                       <span className="truncate">👨‍🏫 સેલર: {book.sellerName || book.authorAnon}</span>
                       <span className="text-indigo-500 font-bold shrink-0 ml-1">પ્રોફાઇલ ➔</span>
@@ -836,527 +913,718 @@ export function MarketplaceTab({ onBackToSyllabus }) {
       )}
 
       {/* ============================================================ */}
-      {/* 2. VIEW: BUNDLES & COMBO PACKS (Requirement 6)                */}
-      {/* ============================================================ */}
-      {activeSubTab === "bundles" && (
-        <div className="space-y-4 anim-fade">
-          <div className="one-card p-4 bg-gradient-to-r from-purple-500/15 to-indigo-500/10 border-2 border-purple-500/40 space-y-1">
-            <h2 className="text-sm font-black text-purple-600 dark:text-purple-400">
-              🔥 સ્પેશિયલ ટોપર્સ કોમ્બો બંડલ્સ (Save Big)
-            </h2>
-            <p className="text-xs muted-text">
-              એક સાથે ૩ થી ૪ વિષયોની નોટ્સ ખરીદીને <b>૩૦% થી ૫૦% સુધીની મોટી બચત</b> મેળવો!
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {bundleBooks.length === 0 ? (
-              <div className="col-span-2 text-center py-10 subtle-pill p-6 rounded-2xl text-xs muted-text">
-                હાલમાં કોઈ કોમ્બો બંડલ લાઈવ નથી. સેલર વૉલેટમાં જઈને તમે પણ કોમ્બો બંડલ મૂકી શકો છો!
-              </div>
-            ) : (
-              bundleBooks.map((bundle) => (
-                <div
-                  key={bundle.id}
-                  className="one-card p-4 space-y-3 border-2 border-purple-500/30 hover:border-purple-500 transition shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-500 text-white">
-                      🔥 સુપર કોમ્બો પેક
-                    </span>
-                    <div className="text-right">
-                      <span className="text-lg font-black text-emerald-500 bg-emerald-500/10 px-3 py-0.5 rounded-xl">
-                        ₹{bundle.price}
-                      </span>
-                      {bundle.originalPrice && (
-                        <span className="text-xs muted-text line-through block mt-0.5">
-                          ₹{bundle.originalPrice}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <h3 className="text-sm font-black">{bundle.title}</h3>
-
-                  {/* Included Items in Bundle */}
-                  <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-1 text-xs">
-                    <div className="font-extrabold text-purple-600 dark:text-purple-300">
-                      📦 આ પેકમાં શું શામેલ છે?
-                    </div>
-                    {bundle.bundleItems && bundle.bundleItems.length > 0 ? (
-                      <ul className="list-disc list-inside space-y-0.5 text-[11px] font-semibold">
-                        {bundle.bundleItems.map((item, idx) => (
-                          <li key={idx}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-[11px] muted-text">{bundle.sampleDemoText}</div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
-                    <button
-                      onClick={() => setPreviewBook(bundle)}
-                      className="subtle-pill py-2 text-xs font-black hover:border-purple-500 transition"
-                    >
-                      👁️ સેમ્પલ જુઓ
-                    </button>
-                    <button
-                      onClick={() => {
-                        setCheckoutBook(bundle);
-                        setUtrInput("");
-                      }}
-                      className="bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-xs font-black shadow-sm transition"
-                    >
-                      🔒 કોમ્બો અનલોક કરો
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* 3. VIEW: SELLER WALLET & PUBLISHING HUB (Requirements 1, 3, 7, 8) */}
+      {/* 2. VIEW: SELLER HUB & WALLET (Req 2, 3, 4, 5, 8 & 9)           */}
       {/* ============================================================ */}
       {activeSubTab === "wallet" && (
         <div className="space-y-4 anim-fade">
-          {/* A. WALLET BALANCE & METRICS CARDS */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="one-card p-4 space-y-1 border-l-4 border-l-emerald-500">
-              <div className="text-[10px] font-extrabold muted-text uppercase">ઉપલબ્ધ વૉલેટ બેલેન્સ</div>
-              <div className="text-2xl font-black text-emerald-500">
-                ₹{sellerWalletStats.availableBalance}
-              </div>
-              <div className="text-[9px] muted-text font-bold">સાપ્તાહિક ઉપાડ માટે ઉપલબ્ધ</div>
-            </div>
-
-            <div className="one-card p-4 space-y-1">
-              <div className="text-[10px] font-extrabold muted-text uppercase">કુલ નેટ કમાણી</div>
-              <div className="text-2xl font-black text-indigo-500">
-                ₹{sellerWalletStats.totalNetEarnings}
-              </div>
-              <div className="text-[9px] muted-text font-bold">
-                વેચાણ: {sellerWalletStats.totalSalesCount} ઓર્ડર્સ
-              </div>
-            </div>
-
-            <div className="one-card p-4 space-y-1">
-              <div className="text-[10px] font-extrabold muted-text uppercase">પેન્ડિંગ વિનંતીઓ</div>
-              <div className="text-2xl font-black text-amber-500">
-                ₹{sellerWalletStats.totalPendingPayout}
-              </div>
-              <div className="text-[9px] text-amber-500 font-bold">વેરિફિકેશન હેઠળ</div>
-            </div>
-
-            <div className="one-card p-4 space-y-1">
-              <div className="text-[10px] font-extrabold muted-text uppercase">કુલ મેળવેલ ચુકવણી</div>
-              <div className="text-2xl font-black text-slate-800 dark:text-slate-200">
-                ₹{sellerWalletStats.totalPaidOut}
-              </div>
-              <div className="text-[9px] text-emerald-500 font-bold">UPI ખાતામાં જમા</div>
-            </div>
-          </div>
-
-          {/* B. WALLET ACTION BAR: REQUEST PAYOUT & VIP UPGRADE */}
-          <div className="one-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gradient-to-r from-emerald-500/10 via-transparent to-amber-500/10">
-            <div>
-              <div className="text-xs font-black text-slate-800 dark:text-slate-200">
-                💰 સાપ્તાહિક પેઆઉટ સિસ્ટમ (Weekly Consolidated Payout)
-              </div>
-              <p className="text-[11px] muted-text mt-0.5">
-                તમારી બુક્સના વેચાણની રકમ સીધી તમારા UPI (GPay / PhonePe / Paytm) માં ટ્રાન્સફર કરવા વિનંતી મોકલો.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setPayoutAmountInput(sellerWalletStats.availableBalance.toString());
-                  setPayoutUpiInput(currentUser?.mobile ? `${currentUser.mobile}@upi` : "");
-                  setPayoutModalOpen(true);
-                }}
-                disabled={sellerWalletStats.availableBalance <= 0}
-                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm ${
-                  sellerWalletStats.availableBalance > 0
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                    : "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
-                }`}
-              >
-                <span>💸</span>
-                <span>વિનંતી મોકલો (₹{sellerWalletStats.availableBalance})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setVipUpgradeModalOpen(true)}
-                className="flex-1 sm:flex-initial subtle-pill px-3.5 py-2.5 rounded-xl text-xs font-black hover:border-amber-500 text-amber-500 flex items-center justify-center gap-1"
-              >
-                <span>👑</span>
-                <span>{activeUserSubscription ? "VIP સક્રિય" : "₹500 VIP પ્લાન"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* C. PAYOUT HISTORY WITH REVERSAL LOG (Requirement 1 & 3) */}
-          <div className="one-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-extrabold uppercase muted-text">
-                📜 પેઆઉટ ઉપાડ વિનંતી હિસ્ટ્રી
-              </h3>
-              <span className="text-[10px] muted-text font-bold">
-                {myPayouts.length} વિનંતીઓ
-              </span>
-            </div>
-
-            {myPayouts.length === 0 ? (
-              <div className="text-[11px] muted-text text-center py-4 subtle-pill p-3">
-                હજુ સુધી કોઈ પેઆઉટ વિનંતી કરી નથી. પુસ્તક વેચાય એટલે ઉપાડ કરી શકશો.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {myPayouts.map((p) => {
-                  const isPaid = p.status === "Paid";
-                  const isReversed = p.status === "Reversed";
-
-                  return (
-                    <div
-                      key={p.id}
-                      className={`subtle-pill p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 ${
-                        isPaid
-                          ? "border-l-emerald-500"
-                          : isReversed
-                          ? "border-l-rose-500"
-                          : "border-l-amber-500"
-                      }`}
-                    >
+          {/* CASE A: USER HAS NOT BEEN APPROVED AS SELLER YET (Requirement 2) */}
+          {!isSellerApproved ? (
+            <div className="one-card p-5 sm:p-6 space-y-4 border-2 border-indigo-500">
+              {mySellerApplication && mySellerApplication.status === "Pending" ? (
+                // 24 to 36 hours verification banner
+                <div className="text-center py-8 space-y-3">
+                  <div className="w-16 h-16 rounded-3xl bg-amber-500/15 text-amber-500 flex items-center justify-center text-3xl mx-auto animate-pulse">
+                    ⏳
+                  </div>
+                  <h3 className="text-base font-black text-amber-500">
+                    તમારી સેલર અરજી ચકાસણી હેઠળ છે!
+                  </h3>
+                  <div className="max-w-md mx-auto p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs leading-relaxed font-semibold text-slate-700 dark:text-slate-300">
+                    અમારી એડમિન ટીમ તમારી માહિતી અને નોટ્સની ગુણવત્તા <b>૨૪ થી ૩૬ કલાકમાં</b> ચકાસીને એકાઉન્ટ મંજૂર કરશે.
+                    <br />
+                    અરજી તારીખ: <b>{mySellerApplication.appliedAt}</b>
+                  </div>
+                  <p className="text-[11px] muted-text">
+                    એડમિન દ્વારા મંજૂરી મળતાં જ તમારું સેલર ડેશબોર્ડ અને વૉલેટ આપોઆપ અનલૉક થઈ જશે.
+                  </p>
+                  <button
+                    onClick={() =>
+                      openAdminWhatsApp(
+                        `Hello Target Track Admin, I have submitted my Seller Application for mobile: ${userMobile}. Please check.`
+                      )
+                    }
+                    className="subtle-pill px-4 py-2 text-xs font-black text-emerald-600 hover:border-emerald-500"
+                  >
+                    💬 એડમિન સાથે WhatsApp પર વાત કરો
+                  </button>
+                </div>
+              ) : (
+                // Seller Registration Application Form (Requirement 2 & 7)
+                <div className="space-y-4">
+                  <div className="border-b pb-3" style={{ borderColor: "var(--border-col)" }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🎓</span>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-sm">₹{p.amount}</span>
-                          <span
-                            className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
-                              isPaid
-                                ? "bg-emerald-500/15 text-emerald-500"
-                                : isReversed
-                                ? "bg-rose-500/15 text-rose-500"
-                                : "bg-amber-500/15 text-amber-500"
-                            }`}
-                          >
-                            {isPaid
-                              ? "✅ ચૂકવાઈ ગયું (Paid)"
-                              : isReversed
-                              ? "↩️ રિવર્સ થયેલ (વૉલેટમાં પાછું જમા)"
-                              : "⏳ પ્રોસેસિંગ હેઠળ"}
-                          </span>
-                        </div>
-                        <div className="text-[10px] muted-text mt-0.5">
-                          તારીખ: {p.requestedAt} • UPI: <b className="font-mono text-indigo-500">{p.upiId}</b>
-                        </div>
-                        {isPaid && p.adminUtr && (
-                          <div className="text-[10px] text-emerald-500 font-extrabold mt-0.5">
-                            Bank Ref / UTR: {p.adminUtr}
-                          </div>
-                        )}
-                        {isReversed && (
-                          <div className="text-[10px] text-rose-500 font-extrabold mt-0.5">
-                            રિવર્સલ નોંધ: એડમિન દ્વારા રિવર્સ કરી રકમ આપના વૉલેટમાં પુનઃ જમા કરેલ છે.
-                          </div>
-                        )}
+                        <h2 className="text-base font-black text-indigo-600 dark:text-indigo-400">
+                          સેલર એકાઉન્ટ વેરિફિકેશન અરજી
+                        </h2>
+                        <p className="text-xs muted-text mt-0.5">
+                          ગુણવત્તા જાળવવા માટે સેલર વેરિફિકેશન ફરજિયાત છે. મંજૂરી સમય: ૨૪ થી ૩૬ કલાક.
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  </div>
 
-          {/* D. PUBLISH NEW BOOK OR BUNDLE FORM (Requirement 6, 7 & 8) */}
-          <div className="one-card p-4 sm:p-5 space-y-4 border-2 border-emerald-500/30">
-            <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
-              <div>
-                <h3 className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                  📤 નવી બુક / કોમ્બો બંડલ લિસ્ટ કરો
-                </h3>
-                <p className="text-[11px] muted-text">
-                  વેબસાઈટ પરથી વિદ્યાર્થીઓ સીધી ડાઉનલોડ કરી શકે તેવી ગુણવત્તાયુક્ત નોટ્સ મૂકો.
-                </p>
-              </div>
-              <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-500">
-                {activeUserSubscription ? "👑 VIP: 0% કમિશન" : "૧૦% કમિશન પ્લાન"}
-              </span>
-            </div>
+                  <form onSubmit={handleSubmitSellerApplication} className="space-y-3.5 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-extrabold muted-text mb-1">
+                          તમારું પૂરું નામ *
+                        </label>
+                        <input
+                          type="text"
+                          value={applyName}
+                          onChange={(e) => setApplyName(e.target.value)}
+                          className="w-full theme-input p-2.5 text-xs font-semibold"
+                          required
+                        />
+                      </div>
 
-            <form onSubmit={handlePublishBook} className="space-y-3.5">
-              {/* Single or Bundle Toggle */}
-              <div className="flex items-center gap-3 p-3 rounded-2xl bg-black/5 dark:bg-white/5">
-                <label className="text-xs font-black">લિસ્ટિંગ પ્રકાર:</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSellIsBundle(false)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                      !sellIsBundle
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "subtle-pill"
-                    }`}
-                  >
-                    📖 એક પુસ્તક
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSellIsBundle(true)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                      sellIsBundle
-                        ? "bg-purple-600 text-white shadow-xs"
-                        : "subtle-pill"
-                    }`}
-                  >
-                    📦 કોમ્બો બંડલ (Multi-Book)
-                  </button>
-                </div>
-              </div>
+                      <div>
+                        <label className="block text-[11px] font-extrabold muted-text mb-1">
+                          શહેર / જિલ્લો *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="દા.ત. ગાંધીનગર, અમદાવાદ, રાજકોટ"
+                          value={applyCity}
+                          onChange={(e) => setApplyCity(e.target.value)}
+                          className="w-full theme-input p-2.5 text-xs font-semibold"
+                          required
+                        />
+                      </div>
+                    </div>
 
-              {/* Title */}
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  પુસ્તક / નોટ્સનું આકર્ષક શીર્ષક *
-                </label>
-                <input
-                  type="text"
-                  placeholder="દા.ત. CCE 2026 ગણિત શોર્ટકટ્સ & ફોર્મ્યુલા માસ્ટર બુક"
-                  value={sellTitle}
-                  onChange={(e) => setSellTitle(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-semibold"
-                  required
-                />
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-extrabold muted-text mb-1">
+                          પરીક્ષાનો અનુભવ / રેન્ક *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="દા.ત. CCE Group A/B Rank 14, GPSC Prelims Qualified"
+                          value={applyExamExp}
+                          onChange={(e) => setApplyExamExp(e.target.value)}
+                          className="w-full theme-input p-2.5 text-xs font-semibold"
+                          required
+                        />
+                      </div>
 
-              {/* Exam & Subject */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-extrabold muted-text mb-1">પરીક્ષા કેટેગરી *</label>
-                  <select
-                    value={sellExam}
-                    onChange={(e) => setSellExam(e.target.value)}
-                    className="w-full theme-input p-2.5 text-xs font-semibold"
-                  >
-                    <option value="CCE (Group A & B)">CCE (Group A & B)</option>
-                    <option value="GPSC Class 1-2">GPSC Class 1-2</option>
-                    <option value="Police PSI / Constable">Police PSI / Constable</option>
-                    <option value="General / Other">જનરલ નોલેજ / અન્ય</option>
-                  </select>
-                </div>
+                      <div>
+                        <label className="block text-[11px] font-extrabold muted-text mb-1">
+                          કમાણી ઉપાડવા માટે તમારું UPI ID *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="उदा. 9876543210@paytm, name@okaxis"
+                          value={applyUpi}
+                          onChange={(e) => setApplyUpi(e.target.value)}
+                          className="w-full theme-input p-2.5 text-xs font-mono font-bold"
+                          required
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-[11px] font-extrabold muted-text mb-1">વિષયનું નામ *</label>
-                  <input
-                    type="text"
-                    placeholder="દા.ત. રીઝનિંગ, ગુજરાતનો ઈતિહાસ, બંધારણ"
-                    value={sellSubject}
-                    onChange={(e) => setSellSubject(e.target.value)}
-                    className="w-full theme-input p-2.5 text-xs font-semibold"
-                    required
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-[11px] font-extrabold muted-text mb-1">
+                        તમારો ટૂંકો પરિચય (Bio - વિદ્યાર્થીઓને તમારી પ્રોફાઇલ પર દેખાશે)
+                      </label>
+                      <textarea
+                        rows={2}
+                        placeholder="દા.ત. ૩ વર્ષથી GPSC/CCE ની તૈયારીનો અનુભવ, ગણિત અને રીઝનિંગ શોર્ટકટ્સ એક્સપર્ટ..."
+                        value={applyBio}
+                        onChange={(e) => setApplyBio(e.target.value)}
+                        className="w-full theme-input p-2.5 text-xs font-semibold"
+                      ></textarea>
+                    </div>
 
-              {/* If Bundle: Items textarea */}
-              {sellIsBundle && (
-                <div>
-                  <label className="block text-[11px] font-extrabold text-purple-600 dark:text-purple-400 mb-1">
-                    📦 આ કોમ્બોમાં શામેલ પુસ્તકોના નામ (દરેક નવી લીટીમાં) *
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="૧. ગણિત શોર્ટકટ્સ (120 પેજ)&#10;૨. રીઝનિંગ માસ્ટર બુક (140 પેજ)&#10;૩. બંધારણ કેપ્સ્યુલ (90 પેજ)"
-                    value={sellBundleItemsText}
-                    onChange={(e) => setSellBundleItemsText(e.target.value)}
-                    className="w-full theme-input p-2.5 text-xs font-semibold"
-                  ></textarea>
+                    {/* Mandatory Seller Policies Checkbox (Requirement 7) */}
+                    <div className="p-3 rounded-2xl bg-black/5 dark:bg-white/5 space-y-2">
+                      <div className="flex items-start gap-2 text-[11px] leading-snug">
+                        <input
+                          type="checkbox"
+                          id="sellerTermsCheck"
+                          checked={applyTermsCheck}
+                          onChange={(e) => setApplyTermsCheck(e.target.checked)}
+                          className="mt-0.5 rounded accent-indigo-600 cursor-pointer w-4 h-4 shrink-0"
+                          required
+                        />
+                        <label htmlFor="sellerTermsCheck" className="cursor-pointer font-semibold select-none">
+                          હું Target Track ની{" "}
+                          <button
+                            type="button"
+                            onClick={() => { setLegalModalTab("terms"); setLegalModalOpen(true); }}
+                            className="text-indigo-500 font-bold underline"
+                          >
+                            સેલર નીતિઓ
+                          </button>
+                          ,{" "}
+                          <button
+                            type="button"
+                            onClick={() => { setLegalModalTab("pricing"); setLegalModalOpen(true); }}
+                            className="text-indigo-500 font-bold underline"
+                          >
+                            કમિશન શરતો
+                          </button>{" "}
+                          અને કૉપિરાઇટ કાયદા સાથે સંપૂર્ણપણે સહમત છું. મારી નોટ્સ મારી સ્વ-તૈયાર કરેલ છે.
+                        </label>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl text-xs shadow-md transition"
+                    >
+                      🚀 સેલર વેરિફિકેશન અરજી સબમિટ કરો (૨૪-૩૬ કલાકમાં મંજૂરી)
+                    </button>
+                  </form>
                 </div>
               )}
-
-              {/* Pricing & Offers (Requirement 6 & 8) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-black/5 dark:bg-white/5">
-                <div>
-                  <label className="block text-[11px] font-extrabold muted-text mb-1">
-                    મૂળ કિંમત (MRP ₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="20"
-                    value={sellOriginalPrice}
-                    onChange={(e) => setSellOriginalPrice(e.target.value)}
-                    className="w-full theme-input p-2 text-xs font-semibold"
-                  />
-                  <span className="text-[10px] muted-text">ડિસ્કાઉન્ટ બતાવવા માટે</span>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-extrabold text-emerald-500 mb-1">
-                    ઑફર વેચાણ કિંમત (Selling Price ₹) *
-                  </label>
-                  <input
-                    type="number"
-                    min="20"
-                    value={sellOfferPrice}
-                    onChange={(e) => setSellOfferPrice(e.target.value)}
-                    className="w-full theme-input p-2 text-xs font-extrabold text-emerald-500"
-                    required
-                  />
-                  <span className="text-[10px] muted-text">વિદ્યાર્થી આટલા ચૂકવશે</span>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-extrabold muted-text mb-1">
-                    તમને ચોખ્ખા મળશે (Net Payout)
-                  </label>
-                  <div className="text-base font-black text-indigo-500 pt-1">
-                    ₹{activeUserSubscription ? sellOfferPrice : Math.round(Number(sellOfferPrice || 0) * 0.9)}
+            </div>
+          ) : (
+            // CASE B: APPROVED SELLER FULL DASHBOARD (Requirement 3, 4, 5, 8 & 9)
+            <div className="space-y-4">
+              {/* WALLET METRICS (Clean Gujarati - Requirement 8 & 9) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="one-card p-4 space-y-1 border-l-4 border-l-emerald-500">
+                  <div className="text-[10px] font-extrabold muted-text uppercase">ઉપલબ્ધ વૉલેટ બેલેન્સ</div>
+                  <div className="text-2xl font-black text-emerald-500">
+                    ₹{sellerWalletStats.availableBalance}
                   </div>
-                  <span className="text-[10px] muted-text">
-                    {activeUserSubscription ? "👑 0% કમિશન કપાત" : "૧૦% એડમિન કમિશન બાદ"}
+                  <div className="text-[9px] muted-text font-bold">સાપ્તાહિક ઉપાડ માટે તૈયાર</div>
+                </div>
+
+                <div className="one-card p-4 space-y-1">
+                  <div className="text-[10px] font-extrabold muted-text uppercase">કુલ નેટ કમાણી</div>
+                  <div className="text-2xl font-black text-indigo-500">
+                    ₹{sellerWalletStats.totalNetEarnings}
+                  </div>
+                  <div className="text-[9px] muted-text font-bold">
+                    વેચાણ: {sellerWalletStats.totalSalesCount} ઓર્ડર્સ
+                  </div>
+                </div>
+
+                <div className="one-card p-4 space-y-1">
+                  <div className="text-[10px] font-extrabold muted-text uppercase">પેન્ડિંગ વિનંતીઓ</div>
+                  <div className="text-2xl font-black text-amber-500">
+                    ₹{sellerWalletStats.totalPendingPayout}
+                  </div>
+                  <div className="text-[9px] text-amber-500 font-bold">બેંક ટ્રાન્સફર પ્રક્રિયા હેઠળ</div>
+                </div>
+
+                <div className="one-card p-4 space-y-1">
+                  <div className="text-[10px] font-extrabold muted-text uppercase">સફળતાપૂર્વક જમા થયેલ</div>
+                  <div className="text-2xl font-black text-slate-800 dark:text-slate-200">
+                    ₹{sellerWalletStats.totalPaidOut}
+                  </div>
+                  <div className="text-[9px] text-emerald-500 font-bold">તમારા UPI માં જમા</div>
+                </div>
+              </div>
+
+              {/* PAYOUT REQUEST TRIGGER */}
+              <div className="one-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gradient-to-r from-emerald-500/10 via-transparent to-amber-500/10">
+                <div>
+                  <div className="text-xs font-black">
+                    💰 સાપ્તાહિક ચૂકવણી ઉપાડ સિસ્ટમ (Weekly Payout Withdrawal)
+                  </div>
+                  <p className="text-[11px] muted-text mt-0.5">
+                    તમારા પુસ્તકોના વેચાણની રકમ સીધી તમારા UPI (GPay / PhonePe / Paytm) માં ટ્રાન્સફર કરવા વિનંતી મોકલો.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPayoutAmountInput(sellerWalletStats.availableBalance.toString());
+                    setPayoutUpiInput(currentUser?.mobile ? `${currentUser.mobile}@upi` : "");
+                    setPayoutModalOpen(true);
+                  }}
+                  disabled={sellerWalletStats.availableBalance <= 0}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm ${
+                    sellerWalletStats.availableBalance > 0
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                      : "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
+                  }`}
+                >
+                  <span>💸</span>
+                  <span>સાપ્તાહિક ઉપાડ વિનંતી મોકલો (₹{sellerWalletStats.availableBalance})</span>
+                </button>
+              </div>
+
+              {/* PAYOUT HISTORY */}
+              <div className="one-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-extrabold uppercase muted-text">
+                    📜 ઉપાડ વિનંતી હિસ્ટ્રી
+                  </h3>
+                  <span className="text-[10px] muted-text font-bold">
+                    {myPayouts.length} વિનંતીઓ
                   </span>
                 </div>
+
+                {myPayouts.length === 0 ? (
+                  <div className="text-[11px] muted-text text-center py-4 subtle-pill p-3">
+                    હજુ સુધી કોઈ પેઆઉટ વિનંતી કરી નથી. પુસ્તક વેચાય એટલે ઉપાડ કરી શકશો.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {myPayouts.map((p) => {
+                      const isPaid = p.status === "Paid";
+                      const isReversed = p.status === "Reversed";
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`subtle-pill p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 ${
+                            isPaid
+                              ? "border-l-emerald-500"
+                              : isReversed
+                              ? "border-l-rose-500"
+                              : "border-l-amber-500"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-sm">₹{p.amount}</span>
+                              <span
+                                className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                  isPaid
+                                    ? "bg-emerald-500/15 text-emerald-500"
+                                    : isReversed
+                                    ? "bg-rose-500/15 text-rose-500"
+                                    : "bg-amber-500/15 text-amber-500"
+                                }`}
+                              >
+                                {isPaid
+                                  ? "✅ ચૂકવાઈ ગયું (Paid)"
+                                  : isReversed
+                                  ? "↩️ રિવર્સ થયેલ (વૉલેટમાં પુનઃ જમા)"
+                                  : "⏳ પ્રોસેસિંગ હેઠળ"}
+                              </span>
+                            </div>
+                            <div className="text-[10px] muted-text mt-0.5">
+                              તારીખ: {p.requestedAt} • UPI: <b className="font-mono text-indigo-500">{p.upiId}</b>
+                            </div>
+                            {isPaid && p.adminUtr && (
+                              <div className="text-[10px] text-emerald-500 font-extrabold mt-0.5">
+                                Bank UTR: {p.adminUtr}
+                              </div>
+                            )}
+                            {isReversed && (
+                              <div className="text-[10px] text-rose-500 font-extrabold mt-0.5">
+                                રિવર્સલ નોંધ: એડમિન દ્વારા રિવર્સ કરી રકમ આપના વૉલેટમાં પુનઃ જમા કરેલ છે.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Front Cover Photo Upload (Requirement 7) */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-extrabold muted-text">
-                  🖼️ પુસ્તક મુખપૃષ્ઠ (Front Cover) ફોટો અપલોડ કરો *
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCoverUpload}
-                    className="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                  />
-                  {sellCoverImage && (
-                    <img
-                      src={sellCoverImage}
-                      alt="Cover Preview"
-                      className="w-10 h-10 object-cover rounded-xl border border-indigo-500 shadow-xs"
+              {/* DYNAMIC MULTI-BOOK & PER-BOOK VIP PUBLISH FORM (Req 3 & 5) */}
+              <div className="one-card p-4 sm:p-5 space-y-4 border-2 border-emerald-500/40">
+                <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
+                  <div>
+                    <h3 className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                      📤 નવી બુક અથવા મલ્ટી-બુક કોમ્બો લિસ્ટ કરો
+                    </h3>
+                    <p className="text-[11px] muted-text">
+                      દરેક પુસ્તક માટે અલગથી ૧૦% કમિશન અથવા ₹૫૦૦ VIP પ્લાન પસંદ કરી શકાય છે.
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handlePublishBook} className="space-y-3.5">
+                  {/* Single or Combo Toggle */}
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-black/5 dark:bg-white/5">
+                    <label className="text-xs font-black">પ્રકાર પસંદ કરો:</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSellIsBundle(false)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                          !sellIsBundle ? "bg-emerald-600 text-white shadow-xs" : "subtle-pill"
+                        }`}
+                      >
+                        📖 એક પુસ્તક
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSellIsBundle(true)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                          sellIsBundle ? "bg-purple-600 text-white shadow-xs" : "subtle-pill"
+                        }`}
+                      >
+                        📦 મલ્ટી-બુક કોમ્બો પેક
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Title & Exam */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold muted-text mb-1">
+                      {sellIsBundle ? "કોમ્બો પેકનું શીર્ષક *" : "પુસ્તકનું શીર્ષક *"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        sellIsBundle
+                          ? "દા.ત. CCE 2026 ૩-ઇન-૧ મહા-કોમ્બો (ગણિત + રીઝનિંગ + બંધારણ)"
+                          : "દા.ત. CCE Group A & B Master Reasoning Notes"
+                      }
+                      value={sellTitle}
+                      onChange={(e) => setSellTitle(e.target.value)}
+                      className="w-full theme-input p-2.5 text-xs font-semibold"
+                      required
                     />
-                  )}
-                </div>
-              </div>
+                  </div>
 
-              {/* Sample Demo Pages Photos (Requirement 7) */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-extrabold muted-text">
-                  📸 ડેમો સેમ્પલ પેજીસના ફોટા અપલોડ કરો (ગ્રાહક ફ્રીમાં જોઈ શકશે - મહત્તમ ૬ ફોટા)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleDemoPagesUpload}
-                  className="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-slate-700 file:text-white"
-                />
-                {sellDemoImages.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto py-1">
-                    {sellDemoImages.map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt={`Demo ${i + 1}`}
-                        className="w-12 h-12 object-cover rounded-lg border border-slate-400"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-extrabold muted-text mb-1">પરીક્ષા કેટેગરી *</label>
+                      <select
+                        value={sellExam}
+                        onChange={(e) => setSellExam(e.target.value)}
+                        className="w-full theme-input p-2.5 text-xs font-semibold"
+                      >
+                        <option value="CCE (Group A & B)">CCE (Group A & B)</option>
+                        <option value="GPSC Class 1-2">GPSC Class 1-2</option>
+                        <option value="Police PSI / Constable">Police PSI / Constable</option>
+                        <option value="General / Other">જનરલ નોલેજ / અન્ય</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-extrabold muted-text mb-1">વિષયનું નામ *</label>
+                      <input
+                        type="text"
+                        placeholder="દા.ત. રીઝનિંગ, ગુજરાતનો ઈતિહાસ, સંપૂર્ણ કોમ્બો"
+                        value={sellSubject}
+                        onChange={(e) => setSellSubject(e.target.value)}
+                        className="w-full theme-input p-2.5 text-xs font-semibold"
+                        required
                       />
-                    ))}
+                    </div>
                   </div>
-                )}
+
+                  {/* DYNAMIC MULTI-BOOK SECTION (Requirement 3: + Add Book button & multiple PDF upload) */}
+                  {sellIsBundle && (
+                    <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-purple-600 dark:text-purple-400">
+                          📦 કોમ્બોમાં શામેલ પુસ્તકો અને અલગ-અલગ PDF અપલોડ ({bundleBooksList.length} બુક્સ)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleAddBundleBook}
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-xl text-[10px] font-black transition flex items-center gap-1 shadow-xs"
+                        >
+                          <span>+</span>
+                          <span>પુસ્તક ઉમેરો (Add Book)</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {bundleBooksList.map((item, idx) => (
+                          <div key={idx} className="subtle-pill p-3 space-y-2 text-xs border border-purple-400/30">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-extrabold text-[11px] text-purple-600">
+                                પુસ્તક #{idx + 1}
+                              </span>
+                              {bundleBooksList.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveBundleBook(idx)}
+                                  className="text-rose-500 hover:text-rose-700 font-bold text-[10px]"
+                                >
+                                  🗑️ હટાવો
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                placeholder={`દા.ત. પુસ્તક ${idx + 1} નું નામ`}
+                                value={item.title}
+                                onChange={(e) => handleUpdateBundleBook(idx, "title", e.target.value)}
+                                className="w-full theme-input p-2 text-xs font-semibold"
+                                required
+                              />
+                              <input
+                                type="number"
+                                placeholder="કુલ પેજ"
+                                value={item.pages}
+                                onChange={(e) => handleUpdateBundleBook(idx, "pages", e.target.value)}
+                                className="w-full theme-input p-2 text-xs font-semibold"
+                              />
+                            </div>
+
+                            {/* Direct PDF upload for this specific book */}
+                            <div className="flex items-center gap-2 pt-1">
+                              <input
+                                type="file"
+                                accept=".pdf,application/pdf"
+                                onChange={(e) => handleBundlePdfUpload(idx, e.target.files?.[0])}
+                                className="text-[11px] file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:bg-purple-600 file:text-white"
+                              />
+                              {item.fileName && (
+                                <span className="text-[10px] font-bold text-emerald-500 truncate">
+                                  ✓ {item.fileName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Single Book Direct PDF Upload (if not bundle) */}
+                  {!sellIsBundle && (
+                    <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-1.5">
+                      <label className="block text-xs font-black text-indigo-600 dark:text-indigo-400">
+                        📁 સંપૂર્ણ બુક PDF સીધી અપલોડ કરો (વેબસાઈટ પરથી ડાયરેક્ટ ડાઉનલોડ થશે) *
+                      </label>
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setSellDirectFileName(file.name);
+                          const reader = new FileReader();
+                          reader.onload = (ev) => setSellDirectFileData(ev.target.result);
+                          reader.readAsDataURL(file);
+                        }}
+                        className="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-indigo-600 file:text-white"
+                      />
+                      {sellDirectFileName && (
+                        <div className="text-[11px] font-bold text-emerald-500">
+                          ✓ અપલોડ થયેલ: {sellDirectFileName}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PER-BOOK PRICING PLAN SELECTOR (Requirement 5) */}
+                  <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 space-y-2.5 border">
+                    <label className="block text-xs font-black text-slate-800 dark:text-slate-200">
+                      🎯 આ ચોક્કસ બુક માટે પ્લાન પસંદ કરો (Per-Book Plan):
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div
+                        onClick={() => setSellPlanChoice("commission_10")}
+                        className={`p-3 rounded-2xl cursor-pointer border-2 transition ${
+                          sellPlanChoice === "commission_10"
+                            ? "border-emerald-500 bg-emerald-500/10"
+                            : "subtle-pill opacity-75"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-xs">૧૦% કમિશન પ્લાન</span>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500">
+                            શરૂઆતમાં ₹0
+                          </span>
+                        </div>
+                        <p className="text-[10px] muted-text mt-1">
+                          દરેક વેચાણ પર ૧૦% એડમિન કમિશન કપાશે, ૯૦% કમાણી વૉલેટમાં જશે.
+                        </p>
+                      </div>
+
+                      <div
+                        onClick={() => setSellPlanChoice("fixed_500")}
+                        className={`p-3 rounded-2xl cursor-pointer border-2 transition ${
+                          sellPlanChoice === "fixed_500"
+                            ? "border-amber-500 bg-amber-500/10"
+                            : "subtle-pill opacity-75"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-xs">👑 આ બુક માટે VIP પ્લાન</span>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500">
+                            ₹500 / ૩ મહિના
+                          </span>
+                        </div>
+                        <p className="text-[10px] muted-text mt-1">
+                          ૩ મહિના સુધી <b>0% કમિશન (૧૦૦% કમાણી તમારી)</b>!
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* If VIP chosen for this book: UTR field */}
+                    {sellPlanChoice === "fixed_500" && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 mt-2">
+                        <div className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
+                          ₹500 ટ્રાન્સફર માટે Admin UPI: <b className="font-mono text-indigo-500 select-all">9876543210@paytm</b>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="₹500 પેમેન્ટનો 12 આંકડાનો UTR દાખલ કરો *"
+                          value={sellVipUtr}
+                          onChange={(e) => setSellVipUtr(e.target.value)}
+                          className="w-full theme-input p-2 text-xs font-mono font-bold"
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pricing Inputs */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-extrabold muted-text mb-1">
+                        મૂળ કિંમત (MRP ₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="20"
+                        value={sellOriginalPrice}
+                        onChange={(e) => setSellOriginalPrice(e.target.value)}
+                        className="w-full theme-input p-2.5 text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-extrabold text-emerald-500 mb-1">
+                        વેચાણ કિંમત (Offer Price ₹) *
+                      </label>
+                      <input
+                        type="number"
+                        min="20"
+                        value={sellOfferPrice}
+                        onChange={(e) => setSellOfferPrice(e.target.value)}
+                        className="w-full theme-input p-2.5 text-xs font-extrabold text-emerald-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* UPI ID */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold muted-text mb-1">
+                      તમારું UPI ID (કમાણી મેળવવા માટે) *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="उदा. 9876543210@paytm"
+                      value={sellUpi}
+                      onChange={(e) => setSellUpi(e.target.value)}
+                      className="w-full theme-input p-2.5 text-xs font-mono font-bold"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl text-xs shadow-md transition"
+                  >
+                    🚀 લિસ્ટિંગ રિવ્યૂ માટે સબમિટ કરો
+                  </button>
+                </form>
               </div>
 
-              {/* Demo text bullet points */}
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  ડેમો સારાંશ / અગત્યના પોઈન્ટ્સ (ટેક્સ્ટ)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="✓ શોર્ટકટ ફોર્મ્યુલા&#10;✓ ૨૫૦+ વિગતવાર સોલ્વ કરેલા પ્રશ્નો"
-                  value={sellDemoText}
-                  onChange={(e) => setSellDemoText(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-semibold"
-                ></textarea>
-              </div>
-
-              {/* Direct Full Book PDF File Upload (Requirement 7: No Drive link needed!) */}
-              <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2">
-                <label className="block text-xs font-black text-indigo-600 dark:text-indigo-400">
-                  📁 સંપૂર્ણ બુક PDF સીધી અપલોડ કરો (વેબસાઈટ પરથી ડાયરેક્ટ ડાઉનલોડ થશે - Drive Link ની જરૂર નથી) *
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={handleDirectPdfUpload}
-                  className="text-xs file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
-                />
-                {sellDirectFileName && (
-                  <div className="text-[11px] font-bold text-emerald-500 flex items-center gap-1">
-                    <span>✓ અપલોડ થયેલ:</span>
-                    <span>{sellDirectFileName}</span>
+              {/* SELLER SUPPORT & PRE-DEFINED HELP DESK (Requirement 4) */}
+              <div className="one-card p-4 sm:p-5 space-y-3.5 border-l-4 border-l-indigo-600">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🎧</span>
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-black">
+                        સેલર સપોર્ટ & હેલ્પ ડેસ્ક (Seller Help Desk)
+                      </h3>
+                      <p className="text-[10px] muted-text">કોઈપણ મુશ્કેલી હોય તો સીધો સંપર્ક કરો</p>
+                    </div>
                   </div>
-                )}
 
-                <div className="pt-1">
-                  <span className="text-[10px] muted-text block">અથવા જો મોટી ફાઈલ હોય તો Google Drive લિંક આપો (વૈકલ્પિક):</span>
-                  <input
-                    type="url"
-                    placeholder="https://drive.google.com/file/d/..."
-                    value={sellFullUrlBackup}
-                    onChange={(e) => setSellFullUrlBackup(e.target.value)}
-                    className="w-full theme-input p-2 text-xs font-semibold mt-1"
-                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openAdminWhatsApp(
+                        `Hello Target Track Admin, I am Seller (${currentUser?.name || userMobile}). Need help regarding: ${supportCategory}`
+                      )
+                    }
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-1.5 rounded-xl text-xs shadow-xs flex items-center gap-1.5"
+                  >
+                    <span>💬</span>
+                    <span>સેલર WhatsApp હેલ્પલાઇન</span>
+                  </button>
                 </div>
-              </div>
 
-              {/* Seller Payout UPI ID */}
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  તમારું UPI ID (કમાણી મેળવવા માટે) *
-                </label>
-                <input
-                  type="text"
-                  placeholder="उदा. 9876543210@paytm, name@okhdfcbank"
-                  value={sellUpi}
-                  onChange={(e) => setSellUpi(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-semibold font-mono"
-                  required
-                />
-              </div>
+                <form onSubmit={handleSubmitSellerTicket} className="space-y-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-extrabold muted-text mb-1.5">
+                      સમસ્યાનો પ્રકાર પસંદ કરો (Pre-defined Help Options):
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {[
+                        "💸 પેઆઉટ / વૉલેટ ઉપાડ સંબંધિત પ્રશ્ન",
+                        "📚 પુસ્તક મંજૂરી / લિસ્ટિંગ સ્ટેટસ",
+                        "👑 VIP 0% કમિશન પ્લાન પ્રશ્ન",
+                        "📁 PDF અપલોડ કે ડાઉનલોડ ત્રુટિ",
+                        "✏️ કિંમત કે ટાઇટલ બદલવા વિનંતી",
+                        "❓ અન્ય કોઈ પ્રશ્ન",
+                      ].map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSupportCategory(cat)}
+                          className={`p-2 rounded-xl text-[10px] sm:text-[11px] font-bold text-left transition ${
+                            supportCategory === cat
+                              ? "bg-indigo-600 text-white shadow-xs"
+                              : "subtle-pill hover:border-indigo-500"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              <button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl text-xs shadow-md transition"
-              >
-                🚀 નોટ્સ વેચવા માટે સબમિટ કરો
-              </button>
-            </form>
-          </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold muted-text mb-1">
+                      તમારો સંદેશ અથવા વિગતો લખો:
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="સમસ્યાની વિગત અહીં લખો..."
+                      value={supportMsg}
+                      onChange={(e) => setSupportMsg(e.target.value)}
+                      className="w-full theme-input p-2.5 text-xs font-semibold"
+                    ></textarea>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="subtle-pill px-4 py-2 text-xs font-black text-indigo-600 hover:border-indigo-500"
+                  >
+                    📩 સપોર્ટ ટિકિટ મોકલો
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ============================================================ */}
-      {/* 4. VIEW: MY PURCHASES & DOWNLOADS (Requirement 2 & 6)         */}
+      {/* 3. VIEW: MY PURCHASES WITH 2-STEP DELETE (Req 2 & 6)          */}
       {/* ============================================================ */}
       {activeSubTab === "library" && (
         <div className="space-y-4 anim-fade">
           <div className="one-card p-4 space-y-1 border-l-4 border-l-indigo-600">
             <h2 className="text-sm font-black">📂 મારી ખરીદેલ નોટ્સ અને પુસ્તકો</h2>
             <p className="text-xs muted-text">
-              સુરક્ષાના નિયમો મુજબ દરેક ખરીદેલ પુસ્તક <b>મહત્તમ ૨ વખત ડાઉનલોડ</b> કરી શકાય છે.
+              સુરક્ષાના નિયમો મુજબ દરેક પુસ્તક <b>મહત્તમ ૨ વખત ડાઉનલોડ</b> કરી શકાય છે.
             </p>
           </div>
 
           {myOrders.length === 0 ? (
             <div className="text-center py-12 subtle-pill p-6 rounded-2xl text-xs muted-text space-y-2">
               <div className="text-2xl">🛒</div>
-              <div className="font-bold">તમે હજુ કોઈ પુસ્તક કે નોટ્સ ખરીદી નથી.</div>
+              <div className="font-bold">તમે હજુ કોઈ પુસ્તક ખરીદ્યું નથી.</div>
               <button
                 onClick={() => setActiveSubTab("browse")}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-black text-xs mt-2"
@@ -1386,16 +1654,55 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                         </div>
                       </div>
 
-                      <span
-                        className={`text-[10px] font-black px-2.5 py-1 rounded-full self-start sm:self-auto ${
-                          isVerified
-                            ? "bg-emerald-500/15 text-emerald-500"
-                            : "bg-amber-500/15 text-amber-500"
-                        }`}
-                      >
-                        {isVerified ? "✓ Verified & Active" : "⏳ વેરિફિકેશન ચાલુ (Admin Review)"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] font-black px-2.5 py-1 rounded-full ${
+                            isVerified
+                              ? "bg-emerald-500/15 text-emerald-500"
+                              : "bg-amber-500/15 text-amber-500"
+                          }`}
+                        >
+                          {isVerified ? "✓ Verified & Active" : "⏳ વેરિફિકેશન ચાલુ"}
+                        </span>
+
+                        {/* 2-Step Delete Button (Requirement 6) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderToDelete(ord);
+                            setDeleteStep(1);
+                            setDeleteVerifyText("");
+                          }}
+                          className="text-slate-400 hover:text-rose-500 p-1 text-xs transition"
+                          title="આ ખરીદી હિસ્ટ્રીમાંથી કાઢી નાખો"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Multi-Book Bundle individual download links (Requirement 3) */}
+                    {isVerified && ord.bundleFiles && ord.bundleFiles.length > 0 && (
+                      <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-2">
+                        <div className="text-[11px] font-black text-purple-600 dark:text-purple-400">
+                          📦 કોમ્બો પુસ્તકો ડાઉનલોડ કરો:
+                        </div>
+                        <div className="space-y-1.5">
+                          {ord.bundleFiles.map((bFile, bIdx) => (
+                            <div key={bIdx} className="flex items-center justify-between text-xs subtle-pill p-2">
+                              <span className="font-bold">{bFile.title}</span>
+                              <button
+                                onClick={() => handleDownloadBookPdf(ord, bIdx)}
+                                disabled={limitReached}
+                                className="bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-1 rounded-lg text-[10px] font-black"
+                              >
+                                📥 PDF ડાઉનલોડ
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-xs" style={{ borderColor: "var(--border-col)" }}>
                       <div className="font-extrabold">
@@ -1410,37 +1717,23 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                           🧾 ડિજિટલ બિલ
                         </button>
 
-                        {isVerified && (
-                          <>
-                            <button
-                              onClick={() => handleDownloadBookPdf(ord)}
-                              disabled={limitReached}
-                              className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black shadow-xs transition flex items-center gap-1 ${
-                                limitReached
-                                  ? "bg-slate-400 text-white cursor-not-allowed"
-                                  : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                              }`}
-                            >
-                              <span>📥</span>
-                              <span>
-                                {limitReached
-                                  ? "🔒 મર્યાદા સમાપ્ત (2/2)"
-                                  : `ડાઉનલોડ PDF (${dCount}/2)`}
-                              </span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setReviewOrderToRate(ord);
-                                setRatingStars(5);
-                                setRatingComment("");
-                              }}
-                              className="subtle-pill px-2.5 py-1.5 rounded-xl text-[10px] font-black hover:border-amber-500 text-amber-500 flex items-center gap-1"
-                            >
-                              <span>⭐</span>
-                              <span>રેટિંગ આપો</span>
-                            </button>
-                          </>
+                        {isVerified && !ord.bundleFiles && (
+                          <button
+                            onClick={() => handleDownloadBookPdf(ord)}
+                            disabled={limitReached}
+                            className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black shadow-xs transition flex items-center gap-1 ${
+                              limitReached
+                                ? "bg-slate-400 text-white cursor-not-allowed"
+                                : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                            }`}
+                          >
+                            <span>📥</span>
+                            <span>
+                              {limitReached
+                                ? "🔒 મર્યાદા સમાપ્ત (2/2)"
+                                : `ડાઉનલોડ PDF (${dCount}/2)`}
+                            </span>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1453,8 +1746,70 @@ export function MarketplaceTab({ onBackToSyllabus }) {
       )}
 
       {/* ============================================================ */}
-      {/* MODAL 1: SAMPLE DEMO PREVIEW WITH PHOTO GALLERY (Req 7)       */}
+      {/* 2-STEP ORDER DELETE VERIFICATION MODAL (Requirement 6)        */}
       {/* ============================================================ */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
+          <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-rose-500 shadow-2xl">
+            <div className="flex items-center gap-2 text-rose-500">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-sm font-black">
+                {deleteStep === 1 ? "પગલું ૧/૨: ખરીદી હિસ્ટ્રી ડિલીટ?" : "પગલું ૨/૨: અંતિમ પુષ્ટિ (DELETE)"}
+              </h3>
+            </div>
+
+            {deleteStep === 1 ? (
+              <div className="space-y-3 text-xs">
+                <p className="leading-relaxed">
+                  શું તમે ખરેખર <b>"{orderToDelete.bookTitle}"</b> ની ખરીદી રેકોર્ડ લિસ્ટમાંથી હટાવવા માંગો છો?
+                </p>
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                  નોંધ: આ ડિલીટ કરવાથી તમારો ડાઉનલોડ કરવાનો એક્સેસ બંધ થઈ જશે.
+                </div>
+                <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
+                  <button onClick={() => setOrderToDelete(null)} className="subtle-pill px-4 py-2 font-bold">
+                    રદ કરો
+                  </button>
+                  <button
+                    onClick={() => setDeleteStep(2)}
+                    className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl font-black"
+                  >
+                    આગળ વધો (Step 2) ➔
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <p className="leading-relaxed">
+                  ખાતરી કરવા માટે નીચેના ખાનામાં <b>DELETE</b> ટાઈપ કરો:
+                </p>
+                <input
+                  type="text"
+                  placeholder="DELETE લખો"
+                  value={deleteVerifyText}
+                  onChange={(e) => setDeleteVerifyText(e.target.value)}
+                  className="w-full theme-input p-2.5 text-xs font-mono font-black text-rose-500 uppercase"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
+                  <button onClick={() => setOrderToDelete(null)} className="subtle-pill px-4 py-2 font-bold">
+                    રદ કરો
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteOrder}
+                    disabled={deleteVerifyText.trim().toUpperCase() !== "DELETE"}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white px-5 py-2 rounded-xl font-black"
+                  >
+                    કાયમ માટે ડિલીટ કરો
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SAMPLE DEMO PREVIEW MODAL */}
       {previewBook && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
           <div className="w-full max-w-lg one-card p-5 space-y-3.5 border-2 border-indigo-500 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1474,7 +1829,6 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             <div className="space-y-3">
               <div className="text-xs sm:text-sm font-black">{previewBook.title}</div>
 
-              {/* Photo Gallery Viewer for Scanned Pages */}
               {previewBook.demoImages && previewBook.demoImages.length > 0 ? (
                 <div className="space-y-2">
                   <div className="relative w-full h-64 rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-indigo-500/40">
@@ -1516,47 +1870,17 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 </div>
               ) : (
                 <div className="relative w-full h-40 rounded-2xl overflow-hidden bg-black/10">
-                  <img
-                    src={previewBook.coverImage}
-                    alt={previewBook.title}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={previewBook.coverImage} alt={previewBook.title} className="w-full h-full object-cover" />
                 </div>
               )}
 
-              {/* Demo text summary */}
               <div className="p-3.5 rounded-2xl subtle-pill text-xs whitespace-pre-wrap leading-relaxed font-medium">
                 {previewBook.sampleDemoText || "આ પુસ્તકના પ્રથમ ૫ પેજનો ડેમો સારાંશ અહીં જોઈ શકાય છે."}
               </div>
-
-              {/* Ratings List on Book */}
-              {previewBook.ratings && previewBook.ratings.length > 0 && (
-                <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
-                  <div className="text-[11px] font-extrabold">
-                    ⭐ વિદ્યાર્થીઓના રિવ્યૂઝ ({previewBook.ratings.filter((r) => !r.hidden).length})
-                  </div>
-                  <div className="max-h-32 overflow-y-auto space-y-1.5">
-                    {previewBook.ratings
-                      .filter((r) => !r.hidden)
-                      .map((rev) => (
-                        <div key={rev.id} className="subtle-pill p-2 text-[10px] space-y-0.5">
-                          <div className="flex items-center justify-between font-bold">
-                            <span>{rev.studentName}</span>
-                            <span className="text-amber-500">{"★".repeat(rev.rating)}</span>
-                          </div>
-                          {rev.comment && <div className="muted-text">{rev.comment}</div>}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="pt-2 border-t flex justify-end gap-2" style={{ borderColor: "var(--border-col)" }}>
-              <button
-                onClick={() => setPreviewBook(null)}
-                className="subtle-pill px-4 py-2 text-xs font-bold"
-              >
+              <button onClick={() => setPreviewBook(null)} className="subtle-pill px-4 py-2 text-xs font-bold">
                 બંધ કરો
               </button>
               <button
@@ -1574,9 +1898,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* MODAL 2: BUY CHECKOUT MODAL                                  */}
-      {/* ============================================================ */}
+      {/* BUY CHECKOUT MODAL */}
       {checkoutBook && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
           <div className="w-full max-w-md one-card p-5 space-y-4 border-2 border-emerald-500 shadow-2xl">
@@ -1597,12 +1919,11 @@ export function MarketplaceTab({ onBackToSyllabus }) {
               <div className="p-3 rounded-2xl subtle-pill space-y-1">
                 <div className="text-xs font-black">{checkoutBook.title}</div>
                 <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="muted-text">ચુકવવાની ચોખ્ખી રકમ:</span>
+                  <span className="muted-text">ચુકવવાની રકમ:</span>
                   <span className="text-lg font-black text-emerald-500">₹{checkoutBook.price}</span>
                 </div>
               </div>
 
-              {/* UPI Payment Instructions */}
               <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2 text-center">
                 <div className="text-[11px] font-extrabold text-indigo-500">
                   📲 Google Pay / PhonePe / Paytm સ્કેન કરો અથવા UPI આઈડી કોપી કરો:
@@ -1611,7 +1932,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                   9876543210@paytm
                 </div>
                 <div className="text-[10px] muted-text">
-                  (રકમ ₹{checkoutBook.price} ટ્રાન્સફર કરીને નીચે UTR નંબર દાખલ કરો)
+                  (રકમ ₹{checkoutBook.price} ટ્રાન્સફર કરીને નીચે ૧૨ આંકડાનો UTR નંબર દાખલ કરો)
                 </div>
               </div>
 
@@ -1631,10 +1952,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             </div>
 
             <div className="pt-2 border-t flex justify-end gap-2" style={{ borderColor: "var(--border-col)" }}>
-              <button
-                onClick={() => setCheckoutBook(null)}
-                className="subtle-pill px-4 py-2 text-xs font-bold"
-              >
+              <button onClick={() => setCheckoutBook(null)} className="subtle-pill px-4 py-2 text-xs font-bold">
                 રદ કરો
               </button>
               <button
@@ -1649,9 +1967,60 @@ export function MarketplaceTab({ onBackToSyllabus }) {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* MODAL 3: SELLER PORTFOLIO MODAL (Requirement 6)              */}
-      {/* ============================================================ */}
+      {/* PAYOUT REQUEST MODAL */}
+      {payoutModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
+          <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-emerald-500 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💰</span>
+                <h3 className="text-sm font-black">સાપ્તાહિક પેઆઉટ ઉપાડ વિનંતી</h3>
+              </div>
+              <button onClick={() => setPayoutModalOpen(false)} className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPayoutRequest} className="space-y-3">
+              <div className="p-3 rounded-2xl subtle-pill text-xs flex justify-between items-center">
+                <span className="muted-text">ઉપલબ્ધ બેલેન્સ:</span>
+                <span className="text-base font-black text-emerald-500">₹{sellerWalletStats.availableBalance}</span>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold muted-text mb-1">ઉપાડ રકમ (₹) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={sellerWalletStats.availableBalance}
+                  value={payoutAmountInput}
+                  onChange={(e) => setPayoutAmountInput(e.target.value)}
+                  className="w-full theme-input p-2.5 text-xs font-black text-emerald-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold muted-text mb-1">UPI ID *</label>
+                <input
+                  type="text"
+                  placeholder="उदा. mobile@upi"
+                  value={payoutUpiInput}
+                  onChange={(e) => setPayoutUpiInput(e.target.value)}
+                  className="w-full theme-input p-2.5 text-xs font-mono font-bold"
+                  required
+                />
+              </div>
+
+              <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs shadow-sm mt-2">
+                વિનંતી મોકલો ➔
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SELLER PORTFOLIO MODAL */}
       {sellerProfileToView && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
           <div className="w-full max-w-lg one-card p-5 space-y-4 border-2 border-indigo-500 shadow-2xl max-h-[85vh] overflow-y-auto">
@@ -1660,15 +2029,11 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 <span className="text-xl">👨‍🏫</span>
                 <h3 className="text-sm font-black">સેલર પ્રોફાઇલ & ઉપલબ્ધ પુસ્તકો</h3>
               </div>
-              <button
-                onClick={() => setSellerProfileToView(null)}
-                className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black"
-              >
+              <button onClick={() => setSellerProfileToView(null)} className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black">
                 ✕
               </button>
             </div>
 
-            {/* Seller Header */}
             <div className="p-3.5 rounded-2xl subtle-pill flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center text-lg font-black">
                 {(sellerProfileToView.sellerName || "T")[0]}
@@ -1686,7 +2051,6 @@ export function MarketplaceTab({ onBackToSyllabus }) {
               </div>
             </div>
 
-            {/* Other Books by this Seller */}
             <div className="space-y-2">
               <div className="text-xs font-extrabold muted-text uppercase">
                 આ સેલરની અન્ય નોટ્સ ({books.filter((b) => b.sellerMobile === sellerProfileToView.sellerMobile).length})
@@ -1695,15 +2059,10 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 {books
                   .filter((b) => b.sellerMobile === sellerProfileToView.sellerMobile)
                   .map((b) => (
-                    <div
-                      key={b.id}
-                      className="subtle-pill p-3 flex items-center justify-between gap-2 text-xs"
-                    >
+                    <div key={b.id} className="subtle-pill p-3 flex items-center justify-between gap-2 text-xs">
                       <div>
                         <div className="font-black">{b.title}</div>
-                        <div className="text-[10px] muted-text font-bold">
-                          {b.exam} • {b.subject}
-                        </div>
+                        <div className="text-[10px] muted-text font-bold">{b.exam} • {b.subject}</div>
                       </div>
                       <div className="text-right shrink-0">
                         <span className="font-black text-emerald-500 block">₹{b.price}</span>
@@ -1723,10 +2082,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             </div>
 
             <div className="pt-2 border-t flex justify-end">
-              <button
-                onClick={() => setSellerProfileToView(null)}
-                className="subtle-pill px-4 py-2 text-xs font-bold"
-              >
+              <button onClick={() => setSellerProfileToView(null)} className="subtle-pill px-4 py-2 text-xs font-bold">
                 બંધ કરો
               </button>
             </div>
@@ -1734,216 +2090,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* MODAL 4: WEEKLY PAYOUT REQUEST MODAL (Requirement 1)         */}
-      {/* ============================================================ */}
-      {payoutModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
-          <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-emerald-500 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">💰</span>
-                <h3 className="text-sm font-black">સાપ્તાહિક પેઆઉટ વિનંતી</h3>
-              </div>
-              <button
-                onClick={() => setPayoutModalOpen(false)}
-                className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitPayoutRequest} className="space-y-3">
-              <div className="p-3 rounded-2xl subtle-pill text-xs flex justify-between items-center">
-                <span className="muted-text">ઉપલબ્ધ બેલેન્સ:</span>
-                <span className="text-base font-black text-emerald-500">
-                  ₹{sellerWalletStats.availableBalance}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  ઉપાડ રકમ (₹) *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={sellerWalletStats.availableBalance}
-                  value={payoutAmountInput}
-                  onChange={(e) => setPayoutAmountInput(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-black text-emerald-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  UPI ID (GPay / PhonePe / Paytm) *
-                </label>
-                <input
-                  type="text"
-                  placeholder="उदा. mobile@upi"
-                  value={payoutUpiInput}
-                  onChange={(e) => setPayoutUpiInput(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs shadow-sm mt-2"
-              >
-                વિનંતી મોકલો ➔
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* MODAL 5: BUYER RATE & REVIEW MODAL (Requirement 6)           */}
-      {/* ============================================================ */}
-      {reviewOrderToRate && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
-          <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-amber-500 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">⭐</span>
-                <h3 className="text-sm font-black">રેટિંગ અને રિવ્યૂ આપો</h3>
-              </div>
-              <button
-                onClick={() => setReviewOrderToRate(null)}
-                className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitRatingReview} className="space-y-3">
-              <div className="text-xs font-black text-slate-800 dark:text-slate-200">
-                {reviewOrderToRate.bookTitle}
-              </div>
-
-              {/* Star selector */}
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1.5">
-                  સ્ટાર્સ પસંદ કરો:
-                </label>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setRatingStars(st)}
-                      className={`text-2xl transition transform hover:scale-125 ${
-                        ratingStars >= st ? "text-amber-400" : "text-slate-300 dark:text-slate-700"
-                      }`}
-                    >
-                      ★
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  તમારો ટૂંકો અનુભવ / ફીડબેક:
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="નોટ્સ ખૂબ જ ઉપયોગી છે, Handwriting ખૂબ સુંદર છે..."
-                  value={ratingComment}
-                  onChange={(e) => setRatingComment(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-semibold"
-                ></textarea>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-2.5 rounded-xl text-xs shadow-sm"
-              >
-                સબમિટ કરો
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* MODAL 6: VIP 3-MONTH PLAN UPGRADE MODAL (Requirement 8)      */}
-      {/* ============================================================ */}
-      {vipUpgradeModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
-          <div className="w-full max-w-md one-card p-5 space-y-4 border-2 border-amber-500 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">👑</span>
-                <h3 className="text-sm font-black">VIP સેલર પ્લાન (0% કમિશન)</h3>
-              </div>
-              <button
-                onClick={() => setVipUpgradeModalOpen(false)}
-                className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs leading-relaxed">
-              <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 space-y-1">
-                <div className="font-black text-amber-600 dark:text-amber-400 text-sm">
-                  ₹500 ફિક્સ પ્લાન — ૩ મહિના માટે 0% કમિશન!
-                </div>
-                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  ✓ ૩ મહિનામાં ગમે તેટલી બુક્સ વેચો, એડમિન કોઈ કમિશન નહીં કાપે.
-                  <br />
-                  ✓ ૧૦૦% કમાણી સીધી તમારા વૉલેટમાં જમા થશે.
-                  <br />
-                  ✓ તમારી બુક્સ પર 👑 VIP સેલર બેજ દેખાશે.
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-black/5 dark:bg-white/5 space-y-1 text-center">
-                <div className="text-[10px] muted-text">₹500 ટ્રાન્સફર માટે Admin UPI:</div>
-                <div className="font-mono font-black text-indigo-500 select-all">9876543210@paytm</div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-extrabold muted-text mb-1">
-                  12-આંકડાનો UTR નંબર દાખલ કરો *
-                </label>
-                <input
-                  type="text"
-                  placeholder="उदा. 431289012345"
-                  value={vipUtrInput}
-                  onChange={(e) => setVipUtrInput(e.target.value)}
-                  className="w-full theme-input p-2.5 text-xs font-bold font-mono tracking-wider"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="pt-2 border-t flex justify-end gap-2" style={{ borderColor: "var(--border-col)" }}>
-              <button
-                onClick={() => setVipUpgradeModalOpen(false)}
-                className="subtle-pill px-4 py-2 text-xs font-bold"
-              >
-                રદ કરો
-              </button>
-              <button
-                onClick={handleRequestVipUpgrade}
-                className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-sm"
-              >
-                વિનંતી સબમિટ કરો
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* MODAL 7: DIGITAL INVOICE / BILL MODAL                        */}
-      {/* ============================================================ */}
+      {/* DIGITAL INVOICE MODAL */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
           <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-indigo-500 shadow-2xl">
@@ -1952,10 +2099,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 <span className="text-lg">🧾</span>
                 <h3 className="text-sm font-black">અધિકૃત ડિજિટલ બિલ</h3>
               </div>
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black"
-              >
+              <button onClick={() => setSelectedInvoice(null)} className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black">
                 ✕
               </button>
             </div>
@@ -1977,7 +2121,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 </div>
                 <div className="flex justify-between">
                   <span className="muted-text">વિદ્યાર્થી:</span>
-                  <span>{selectedInvoice.buyerName} ({selectedInvoice.buyerMobile})</span>
+                  <span>{selectedInvoice.buyerName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="muted-text">UTR Ref:</span>
@@ -1992,16 +2136,20 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             </div>
 
             <div className="pt-2 border-t flex justify-end">
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="subtle-pill px-4 py-2 text-xs font-bold"
-              >
+              <button onClick={() => setSelectedInvoice(null)} className="subtle-pill px-4 py-2 text-xs font-bold">
                 બંધ કરો
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* LEGAL POLICY MODAL (Requirement 7) */}
+      <LegalPolicyModal
+        isOpen={legalModalOpen}
+        onClose={() => setLegalModalOpen(false)}
+        initialTab={legalModalTab}
+      />
     </div>
   );
 }

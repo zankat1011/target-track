@@ -1116,10 +1116,11 @@ export function AdminApp() {
                 </div>
 
                 {/* Sub-Nav Bar inside Book Bazaar (Requirement 5) */}
-                <div className="grid grid-cols-5 gap-1.5 subtle-pill p-1">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 subtle-pill p-1">
                   {[
                     { id: "orders", label: `🛒 ઓર્ડર્સ (${pendingOrders.length})` },
                     { id: "payouts", label: `💰 પેઆઉટ્સ (${pendingPayouts.length})` },
+                    { id: "sellers", label: `🤝 સેલર્સ (${sellerApplications.filter((a) => a.status === "Pending").length})` },
                     { id: "books", label: `📚 બુક્સ (${pendingBooks.length})` },
                     { id: "vip", label: `👑 VIP પ્લાન (${pendingVips.length})` },
                     { id: "reviews", label: `⭐ રેટિંગ્સ (${allReviews.length})` },
@@ -1230,6 +1231,18 @@ export function AdminApp() {
                                       ✓ વેરિફાય થયેલ
                                     </span>
                                   )}
+
+                                  <button
+                                    onClick={() => {
+                                      setAdminOrderToDelete(ord);
+                                      setAdminDeleteStep(1);
+                                      setAdminDeleteVerifyText("");
+                                    }}
+                                    className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-500/10 transition"
+                                    title="ઓર્ડર રેકોર્ડ ડિલીટ કરો"
+                                  >
+                                    🗑️
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -1327,6 +1340,115 @@ export function AdminApp() {
                                   </button>
                                 )}
                               </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ================= SUB-TAB: SELLER ONBOARDING APPLICATIONS (Requirement 2) ================= */}
+                {adminBazaarTab === "sellers" && (
+                  <div className="one-card p-4 space-y-3 border-l-4 border-l-violet-600">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-extrabold">🤝 સેલર વેરિફિકેશન અરજીઓ (24-36 કલાક Review)</span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-500">
+                          {sellerApplications.filter((a) => a.status === "Pending").length} મંજૂરી બાકી
+                        </span>
+                      </div>
+                    </div>
+
+                    {sellerApplications.length === 0 ? (
+                      <div className="text-xs muted-text text-center py-4">હજુ સુધી કોઈ સેલર અરજી આવી નથી.</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {sellerApplications.map((app) => {
+                          const isApproved = app.status === "Approved";
+                          const isRejected = app.status === "Rejected";
+
+                          return (
+                            <div
+                              key={app.id}
+                              className={`subtle-pill p-3.5 space-y-2 text-xs border-l-4 ${
+                                isApproved
+                                  ? "border-l-emerald-500"
+                                  : isRejected
+                                  ? "border-l-rose-500"
+                                  : "border-l-amber-500"
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                <div>
+                                  <span className="font-extrabold text-sm">{app.applicantName}</span>
+                                  <span className="text-[11px] muted-text font-mono ml-2">📞 {app.applicantMobile}</span>
+                                  <div className="text-[10px] muted-text mt-0.5">
+                                    શહેર/જિલ્લો: <b>{app.city || "—"}</b> • પરીક્ષા અનુભવ: <b>{app.examExperience || "—"}</b>
+                                  </div>
+                                </div>
+                                <span
+                                  className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                                    isApproved
+                                      ? "bg-emerald-500/15 text-emerald-500"
+                                      : isRejected
+                                      ? "bg-rose-500/15 text-rose-500"
+                                      : "bg-amber-500/15 text-amber-500"
+                                  }`}
+                                >
+                                  {isApproved
+                                    ? "✓ મંજૂર થયેલ (Approved)"
+                                    : isRejected
+                                    ? "✗ અસ્વીકાર (Rejected)"
+                                    : "⏳ 24-36 કલાક ચકાસણી બાકી"}
+                                </span>
+                              </div>
+
+                              <div
+                                className="text-[11px] pt-1.5 border-t grid grid-cols-1 sm:grid-cols-2 gap-2"
+                                style={{ borderColor: "var(--border-col)" }}
+                              >
+                                <div>
+                                  <span className="muted-text">UPI ID (પેઆઉટ માટે): </span>
+                                  <b className="font-mono text-indigo-500 font-extrabold">{app.upiId}</b>
+                                </div>
+                                <div>
+                                  <span className="muted-text">અરજી તારીખ: </span>
+                                  <b>{app.appliedAt}</b>
+                                </div>
+                              </div>
+
+                              {app.bio && (
+                                <div className="text-[11px] muted-text italic bg-black/5 dark:bg-white/5 p-2 rounded-lg leading-relaxed">
+                                  "{app.bio}"
+                                </div>
+                              )}
+
+                              {isRejected && app.rejectReason && (
+                                <div className="text-[11px] text-rose-500 font-semibold bg-rose-500/10 p-2 rounded-lg">
+                                  અસ્વીકાર કારણ: {app.rejectReason}
+                                </div>
+                              )}
+
+                              {!isApproved && !isRejected && (
+                                <div
+                                  className="flex items-center justify-end gap-2 pt-2 border-t"
+                                  style={{ borderColor: "var(--border-col)" }}
+                                >
+                                  <button
+                                    onClick={() => handleRejectSeller(app.id)}
+                                    className="px-3 py-1.5 rounded-xl border border-rose-500 text-rose-500 hover:bg-rose-500/10 font-bold text-xs transition"
+                                  >
+                                    ❌ અસ્વીકાર કરો
+                                  </button>
+                                  <button
+                                    onClick={() => handleApproveSeller(app.id)}
+                                    className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs transition"
+                                  >
+                                    ✅ સેલર મંજૂર કરો (Seller Live)
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1595,86 +1717,578 @@ export function AdminApp() {
         </div>
       )}
 
-      {/* ================= PAGE 4: BUG REPORTS & 1-TO-1 REPLY ================= */}
-      {activePage === "feedback" && (
-        <div className="space-y-3.5 anim-fade">
-          <div className="one-card p-4 space-y-2.5">
-            <h2 className="text-xs font-extrabold mb-2.5">
-              🛠️ Student Bug Reports & Feature Requests (1-to-1 Reply)
-            </h2>
+      {/* ================= PAGE: FINANCIAL AUDIT & HISAB-KITAB (Requirement 10) ================= */}
+      {activePage === "financials" && (
+        <div className="space-y-4 anim-fade">
+          {(() => {
+            const verifiedOrders = marketplaceOrders.filter((o) => o.status === "Verified");
+            const completedPayouts = marketplacePayouts.filter((p) => p.status === "Completed");
 
-            {feedbacks.length === 0 ? (
-              <div className="text-xs muted-text py-3 text-center">No reports or requests yet.</div>
-            ) : (
-              feedbacks.map((f) => (
-                <div key={f.id} className="subtle-pill p-3.5 space-y-2.5 text-xs border-l-4 border-l-indigo-500">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 text-[10px]">
-                          {f.type}
-                        </span>
-                        <select
-                          value={f.status || (f.adminReply ? "Resolved" : "Pending")}
-                          onChange={(e) => handleUpdateFeedbackStatus(f.id, e.target.value)}
-                          className="theme-input px-2 py-0.5 text-[10px] font-extrabold"
-                        >
-                          <option value="Pending">⏳ Pending</option>
-                          <option value="In Progress">⚙️ Working</option>
-                          <option value="Resolved">✅ Resolved</option>
-                        </select>
-                        <span className="font-extrabold text-sm">👤 {f.studentName || "Student"}</span>
-                        <a href={`tel:${f.mobile}`} className="font-mono font-extrabold text-emerald-500 underline">
-                          📞 {f.mobile}
-                        </a>
-                        <span className="text-[10px] muted-text">• {f.date}</span>
-                      </div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <p className="font-semibold text-xs break-words flex-1">{f.message}</p>
-                        <button
-                          onClick={() => handleCopyReport(f.message)}
-                          title="Copy Text"
-                          className="one-card px-2.5 py-1 rounded-xl text-[10px] font-extrabold text-indigo-500 shrink-0 hover:border-indigo-500"
-                        >
-                          📋 Copy
-                        </button>
-                      </div>
+            // Filter logic by date range
+            const filteredOrders = verifiedOrders.filter((ord) => {
+              if (finDateRange === "all") return true;
+              const now = new Date();
+              let ordTime = 0;
+              if (ord.timestamp) ordTime = ord.timestamp;
+              else if (ord.createdAt) {
+                const parsed = Date.parse(ord.createdAt);
+                if (!isNaN(parsed)) ordTime = parsed;
+              }
+              if (!ordTime) return true;
+              const ordDate = new Date(ordTime);
+
+              if (finDateRange === "today") {
+                return ordDate.toDateString() === now.toDateString();
+              }
+              if (finDateRange === "yesterday") {
+                const y = new Date();
+                y.setDate(y.getDate() - 1);
+                return ordDate.toDateString() === y.toDateString();
+              }
+              if (finDateRange === "week") {
+                const diffDays = (now - ordDate) / (1000 * 60 * 60 * 24);
+                return diffDays <= 7 && diffDays >= 0;
+              }
+              if (finDateRange === "month") {
+                const diffDays = (now - ordDate) / (1000 * 60 * 60 * 24);
+                return diffDays <= 30 && diffDays >= 0;
+              }
+              if (finDateRange === "custom") {
+                if (!finFromDate && !finToDate) return true;
+                const fromTime = finFromDate ? new Date(finFromDate).setHours(0, 0, 0, 0) : 0;
+                const toTime = finToDate ? new Date(finToDate).setHours(23, 59, 59, 999) : Infinity;
+                return ordTime >= fromTime && ordTime <= toTime;
+              }
+              return true;
+            });
+
+            const totalTurnover = filteredOrders.reduce((sum, o) => sum + (Number(o.bookPrice) || 0), 0);
+            const totalAdminProfit = filteredOrders.reduce((sum, o) => sum + (Number(o.adminFee) || 0), 0);
+            const totalSellerShare = filteredOrders.reduce((sum, o) => sum + (Number(o.sellerPayout) || 0), 0);
+            const totalDisbursed = completedPayouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+            // Total unsettled seller liability = all sellers' current wallet balances
+            const allSellerMobiles = Array.from(new Set(marketplaceOrders.map((o) => o.sellerMobile)));
+            const pendingLiability = allSellerMobiles.reduce((acc, m) => {
+              const u = db.users[m];
+              const bal = Number(u?.sellerWallet?.balance || 0);
+              return acc + (bal > 0 ? bal : 0);
+            }, 0);
+
+            // Group orders day-by-day for detailed audit table
+            const dayGroups = {};
+            filteredOrders.forEach((o) => {
+              const dayKey = o.createdAt ? o.createdAt.split(",")[0] : "અન્ય તારીખ";
+              if (!dayGroups[dayKey]) {
+                dayGroups[dayKey] = {
+                  date: dayKey,
+                  ordersCount: 0,
+                  grossVolume: 0,
+                  adminCut: 0,
+                  sellerCut: 0,
+                  orders: [],
+                };
+              }
+              dayGroups[dayKey].ordersCount += 1;
+              dayGroups[dayKey].grossVolume += Number(o.bookPrice) || 0;
+              dayGroups[dayKey].adminCut += Number(o.adminFee) || 0;
+              dayGroups[dayKey].sellerCut += Number(o.sellerPayout) || 0;
+              dayGroups[dayKey].orders.push(o);
+            });
+            const dayList = Object.values(dayGroups);
+
+            return (
+              <div className="space-y-4">
+                {/* Header & Date Range Filter Pills */}
+                <div className="one-card p-4 space-y-3 border-l-4 border-l-emerald-600">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-sm font-extrabold flex items-center gap-1.5">
+                        <span>💰 હિસાબ-કિતાબ & નાણાકીય ઓડિટ રિપોર્ટ</span>
+                      </h2>
+                      <p className="text-[11px] muted-text mt-0.5">
+                        દૈનિક વેચાણ, એડમિન 10% ચોખ્ખો નફો અને સેલર ચૂકવણીનું ચોક્કસ વિશ્લેષણ.
+                      </p>
                     </div>
-                    <button
-                      onClick={() => handleDeleteFeedback(f.id)}
-                      className="text-rose-500 font-bold px-2 py-1 rounded-lg hover:bg-rose-500/10"
-                    >
-                      🗑
-                    </button>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[
+                        { id: "today", label: "📅 આજનો હિસાબ" },
+                        { id: "yesterday", label: "⏪ ગઈકાલ" },
+                        { id: "week", label: "📊 છેલ્લા ૭ દિવસ" },
+                        { id: "month", label: "🗓️ આ મહિનો" },
+                        { id: "all", label: "♾️ ઓલ-ટાઇમ" },
+                        { id: "custom", label: "🎯 કસ્ટમ તારીખ" },
+                      ].map((chip) => (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setFinDateRange(chip.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                            finDateRange === chip.id
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "subtle-pill text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {f.adminReply && (
-                    <div className="one-card px-3 py-2 rounded-xl text-[11px] border-l-2 border-l-emerald-500">
-                      <span className="font-extrabold text-emerald-500">✓ Replied ({f.repliedAt || ""}):</span>{" "}
-                      {f.adminReply}
+                  {/* Custom Date Range Selectors */}
+                  {finDateRange === "custom" && (
+                    <div className="pt-2 border-t flex flex-wrap items-center gap-3 text-xs" style={{ borderColor: "var(--border-col)" }}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="muted-text font-bold">શરૂઆત તારીખ:</span>
+                        <input
+                          type="date"
+                          value={finFromDate}
+                          onChange={(e) => setFinFromDate(e.target.value)}
+                          className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="muted-text font-bold">અંતિમ તારીખ:</span>
+                        <input
+                          type="date"
+                          value={finToDate}
+                          onChange={(e) => setFinToDate(e.target.value)}
+                          className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
+                        />
+                      </div>
+                      {(finFromDate || finToDate) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFinFromDate("");
+                            setFinToDate("");
+                          }}
+                          className="text-[11px] font-bold text-rose-500 underline ml-auto"
+                        >
+                          રીસેટ ફિલ્ટર
+                        </button>
+                      )}
                     </div>
                   )}
+                </div>
 
-                  {/* 1-to-1 Direct Reply Input */}
-                  <div className="flex gap-1.5 pt-1">
-                    <input
-                      type="text"
-                      placeholder={`Reply 1-to-1 directly to ${f.studentName} (${f.mobile})...`}
-                      value={replyDrafts[f.id] || ""}
-                      onChange={(e) =>
-                        setReplyDrafts((prev) => ({ ...prev, [f.id]: e.target.value }))
-                      }
-                      className="flex-1 theme-input px-3 py-1.5 text-xs font-semibold"
-                    />
-                    <button
-                      onClick={() => handleSendBugReply(f.id)}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-[11px] shrink-0 transition"
-                    >
-                      📩 Send 1-to-1 Reply
-                    </button>
+                {/* 5 KPI Cards for Financial Audit */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div className="one-card p-3.5 space-y-1">
+                    <div className="text-[10px] font-bold muted-text">કુલ ટર્નઓવર (Gross)</div>
+                    <div className="text-xl font-black text-slate-800 dark:text-slate-100">
+                      ₹{totalTurnover}
+                    </div>
+                    <div className="text-[9px] text-indigo-500 font-extrabold">{filteredOrders.length} ઓર્ડર્સ</div>
+                  </div>
+
+                  <div className="one-card p-3.5 space-y-1 border-l-4 border-l-emerald-500">
+                    <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">એડમિન ચોખ્ખો નફો (10%)</div>
+                    <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                      ₹{totalAdminProfit}
+                    </div>
+                    <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold">પ્લેટફોર્મ કમાણી</div>
+                  </div>
+
+                  <div className="one-card p-3.5 space-y-1">
+                    <div className="text-[10px] font-bold muted-text">સેલર્સ હિસ્સો (90%)</div>
+                    <div className="text-xl font-black text-violet-500">
+                      ₹{totalSellerShare}
+                    </div>
+                    <div className="text-[9px] muted-text font-bold">વિદ્યાર્થી કમાણી</div>
+                  </div>
+
+                  <div className="one-card p-3.5 space-y-1">
+                    <div className="text-[10px] font-bold muted-text">કુલ ચૂકવાયેલ રકમ</div>
+                    <div className="text-xl font-black text-blue-500">
+                      ₹{totalDisbursed}
+                    </div>
+                    <div className="text-[9px] text-blue-500 font-extrabold">પેઆઉટ્સ પૂર્ણ</div>
+                  </div>
+
+                  <div className="one-card p-3.5 space-y-1 col-span-2 sm:col-span-1 border-l-4 border-l-amber-500">
+                    <div className="text-[10px] font-bold text-amber-500">બાકી વૉલેટ જવાબદારી</div>
+                    <div className="text-xl font-black text-amber-500">
+                      ₹{pendingLiability}
+                    </div>
+                    <div className="text-[9px] text-amber-500 font-extrabold">સેલર લેણું બાકી</div>
                   </div>
                 </div>
-              ))
+
+                {/* Day-by-Day Itemized Analysis Table (Requirement 10) */}
+                <div className="one-card p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-extrabold flex items-center gap-1.5">
+                      <span>📅 તારીખ મુજબ દૈનિક હિસાબ (Day-by-Day Breakdown)</span>
+                    </span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                      {dayList.length} દિવસો રેકોર્ડ
+                    </span>
+                  </div>
+
+                  {dayList.length === 0 ? (
+                    <div className="text-xs muted-text text-center py-6">
+                      પસંદ કરેલ સમયગાળામાં કોઈ વેરિફાઈડ ઓર્ડર્સ મળ્યા નથી.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b text-[10px] uppercase font-black muted-text" style={{ borderColor: "var(--border-col)" }}>
+                            <th className="py-2.5 px-3">તારીખ</th>
+                            <th className="py-2.5 px-3 text-center">ઓર્ડર્સ સંખ્યા</th>
+                            <th className="py-2.5 px-3 text-right">ગ્રોસ વેચાણ (₹)</th>
+                            <th className="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400">એડમિન કમિશન (10%)</th>
+                            <th className="py-2.5 px-3 text-right text-violet-500">સેલર જમા (90%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y" style={{ borderColor: "var(--border-col)" }}>
+                          {dayList.map((d, idx) => (
+                            <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                              <td className="py-2.5 px-3 font-extrabold">{d.date}</td>
+                              <td className="py-2.5 px-3 text-center font-bold">
+                                <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
+                                  {d.ordersCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-black">₹{d.grossVolume}</td>
+                              <td className="py-2.5 px-3 text-right font-black text-emerald-600 dark:text-emerald-400">
+                                +₹{d.adminCut}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-black text-violet-500">
+                                ₹{d.sellerCut}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 font-black text-xs bg-black/5 dark:bg-white/5" style={{ borderColor: "var(--border-col)" }}>
+                            <td className="py-3 px-3 uppercase">કુલ સરવાળો (Total)</td>
+                            <td className="py-3 px-3 text-center">{filteredOrders.length} ઓર્ડર્સ</td>
+                            <td className="py-3 px-3 text-right">₹{totalTurnover}</td>
+                            <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400">₹{totalAdminProfit}</td>
+                            <td className="py-3 px-3 text-right text-violet-500">₹{totalSellerShare}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Detailed Itemized Transactions Ledger */}
+                <div className="one-card p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-extrabold flex items-center gap-1.5">
+                      <span>📜 ઓર્ડરવાર વિસ્તૃત લેજર (Itemized Transactions)</span>
+                    </span>
+                    <span className="text-[10px] font-bold muted-text">{filteredOrders.length} વ્યવહારો</span>
+                  </div>
+
+                  {filteredOrders.length === 0 ? (
+                    <div className="text-xs muted-text text-center py-4">કોઈ લેવડ-દેવડ નથી.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {filteredOrders.map((o) => (
+                        <div
+                          key={o.id}
+                          className="subtle-pill p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold">{o.bookTitle}</span>
+                              <span className="text-[10px] font-mono muted-text">#{o.invoiceNo}</span>
+                            </div>
+                            <div className="text-[10px] muted-text">
+                              ખરીદનાર: <b>{o.buyerName}</b> ({o.buyerMobile}) • સેલર: <b>{o.sellerMobile}</b> • તારીખ: {o.createdAt}
+                            </div>
+                            <div className="text-[10px] font-mono text-indigo-500">UTR: {o.buyerUtr}</div>
+                          </div>
+
+                          <div className="text-right sm:shrink-0">
+                            <div className="font-black text-sm">₹{o.bookPrice}</div>
+                            <div className="text-[10px] text-emerald-500 font-extrabold">
+                              કમિશન: ₹{o.adminFee} | સેલર: ₹{o.sellerPayout}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ================= PAGE 4: BUG REPORTS & 1-TO-1 REPLY (Requirement 11 Partition) ================= */}
+      {activePage === "feedback" && (
+        <div className="space-y-3.5 anim-fade">
+          {(() => {
+            const pendingList = feedbacks.filter(
+              (f) => (f.status || (f.adminReply ? "Resolved" : "Pending")) === "Pending"
+            );
+            const workingList = feedbacks.filter((f) => f.status === "In Progress");
+            const resolvedList = feedbacks.filter(
+              (f) => (f.status || (f.adminReply ? "Resolved" : "Pending")) === "Resolved"
+            );
+
+            let displayList = pendingList;
+            if (reportFilterTab === "working") displayList = workingList;
+            if (reportFilterTab === "resolved") displayList = resolvedList;
+
+            return (
+              <div className="one-card p-4 space-y-3.5 border-l-4 border-l-indigo-600">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-extrabold">
+                      🛠️ Student Bug Reports & Feature Requests (1-to-1 Direct Reply)
+                    </h2>
+                    <p className="text-[11px] muted-text mt-0.5">
+                      વિદ્યાર્થીઓની ફરિયાદો અને સૂચનોને ૩ વિભાગમાં હેન્ડલ કરો.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3 Partition Tabs (Requirement 11) */}
+                <div className="grid grid-cols-3 gap-1.5 subtle-pill p-1">
+                  {[
+                    { id: "pending", label: `⏳ પેન્ડિંગ (${pendingList.length})`, color: "text-amber-500" },
+                    { id: "working", label: `⚙️ કામ ચાલુ છે (${workingList.length})`, color: "text-indigo-500" },
+                    { id: "resolved", label: `✅ સોલ્વ થયેલ (${resolvedList.length})`, color: "text-emerald-500" },
+                  ].map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setReportFilterTab(sub.id)}
+                      className={`py-2 rounded-xl text-xs font-black transition ${
+                        reportFilterTab === sub.id
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : "muted-text hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+
+                {displayList.length === 0 ? (
+                  <div className="text-xs muted-text py-8 text-center">
+                    આ કેટેગરીમાં હાલ કોઈ રિપોર્ટ નથી.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {displayList.map((f) => {
+                      const curStatus = f.status || (f.adminReply ? "Resolved" : "Pending");
+
+                      return (
+                        <div
+                          key={f.id}
+                          className={`subtle-pill p-3.5 space-y-2.5 text-xs border-l-4 ${
+                            curStatus === "Resolved"
+                              ? "border-l-emerald-500"
+                              : curStatus === "In Progress"
+                              ? "border-l-indigo-500"
+                              : "border-l-amber-500"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 text-[10px]">
+                                  {f.type}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                                    curStatus === "Resolved"
+                                      ? "bg-emerald-500/15 text-emerald-500"
+                                      : curStatus === "In Progress"
+                                      ? "bg-indigo-500/15 text-indigo-500"
+                                      : "bg-amber-500/15 text-amber-500"
+                                  }`}
+                                >
+                                  {curStatus === "Resolved"
+                                    ? "✓ Resolved"
+                                    : curStatus === "In Progress"
+                                    ? "⚙️ In Progress"
+                                    : "⏳ Pending"}
+                                </span>
+                                <span className="font-extrabold text-sm">👤 {f.studentName || "Student"}</span>
+                                <a
+                                  href={`tel:${f.mobile}`}
+                                  className="font-mono font-extrabold text-emerald-500 underline"
+                                >
+                                  📞 {f.mobile}
+                                </a>
+                                <span className="text-[10px] muted-text">• {f.date}</span>
+                              </div>
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <p className="font-semibold text-xs break-words flex-1 leading-relaxed">
+                                  {f.message}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyReport(f.message)}
+                                  title="Copy Text"
+                                  className="one-card px-2.5 py-1 rounded-xl text-[10px] font-extrabold text-indigo-500 shrink-0 hover:border-indigo-500 transition"
+                                >
+                                  📋 Copy
+                                </button>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFeedback(f.id)}
+                              className="text-rose-500 font-bold px-2 py-1 rounded-lg hover:bg-rose-500/10 transition"
+                              title="રિપોર્ટ કાયમ માટે કાઢી નાખો"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+
+                          {/* Quick 1-Click Status Shift Buttons */}
+                          <div className="flex items-center gap-1.5 pt-1 border-t text-[10px]" style={{ borderColor: "var(--border-col)" }}>
+                            <span className="muted-text font-bold">સ્ટેટસ બદલો:</span>
+                            {curStatus !== "Pending" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateFeedbackStatus(f.id, "Pending")}
+                                className="px-2 py-0.5 rounded-lg border border-amber-500 text-amber-500 hover:bg-amber-500/10 font-bold transition"
+                              >
+                                ⏳ પેન્ડિંગ
+                              </button>
+                            )}
+                            {curStatus !== "In Progress" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateFeedbackStatus(f.id, "In Progress")}
+                                className="px-2 py-0.5 rounded-lg border border-indigo-500 text-indigo-500 hover:bg-indigo-500/10 font-bold transition"
+                              >
+                                ⚙️ કામ ચાલુ છે
+                              </button>
+                            )}
+                            {curStatus !== "Resolved" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateFeedbackStatus(f.id, "Resolved")}
+                                className="px-2 py-0.5 rounded-lg border border-emerald-500 text-emerald-500 hover:bg-emerald-500/10 font-bold transition"
+                              >
+                                ✅ સોલ્વ થયેલ
+                              </button>
+                            )}
+                          </div>
+
+                          {f.adminReply && (
+                            <div className="one-card px-3 py-2 rounded-xl text-[11px] border-l-2 border-l-emerald-500">
+                              <span className="font-extrabold text-emerald-500">✓ Replied ({f.repliedAt || ""}):</span>{" "}
+                              {f.adminReply}
+                            </div>
+                          )}
+
+                          {/* 1-to-1 Direct Reply Input */}
+                          <div className="flex gap-1.5 pt-1">
+                            <input
+                              type="text"
+                              placeholder={`Reply 1-to-1 directly to ${f.studentName} (${f.mobile})...`}
+                              value={replyDrafts[f.id] || ""}
+                              onChange={(e) =>
+                                setReplyDrafts((prev) => ({ ...prev, [f.id]: e.target.value }))
+                              }
+                              className="flex-1 theme-input px-3 py-1.5 text-xs font-semibold"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSendBugReply(f.id)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-[11px] shrink-0 transition"
+                            >
+                              📩 Send 1-to-1 Reply
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ================= 2-STEP VERIFIED ORDER DELETE MODAL (Requirement 6) ================= */}
+      {adminOrderToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-rose-500 shadow-2xl anim-fade text-center">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center mx-auto text-2xl">
+              ⚠️
+            </div>
+
+            {adminDeleteStep === 1 ? (
+              <div className="space-y-3">
+                <h3 className="text-sm font-extrabold text-rose-500">ઓર્ડર ડિલીટ કરો (Step 1/2)</h3>
+                <p className="text-xs muted-text leading-relaxed">
+                  શું તમે ખરેખર ઓર્ડર <b>#{adminOrderToDelete.invoiceNo}</b> ("{adminOrderToDelete.bookTitle}") કાયમ માટે કાઢી નાખવા માંગો છો? આનાથી ઓર્ડર રેકોર્ડ હિસ્ટ્રીમાંથી દૂર થશે.
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminOrderToDelete(null);
+                      setAdminDeleteStep(1);
+                      setAdminDeleteVerifyText("");
+                    }}
+                    className="subtle-pill py-2 text-xs font-bold"
+                  >
+                    રદ કરો (Cancel)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminDeleteStep(2)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2 rounded-xl text-xs"
+                  >
+                    આગળ વધો ➔
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <h3 className="text-sm font-extrabold text-rose-500">અંતિમ પુષ્ટિ (Step 2/2)</h3>
+                <p className="text-xs text-rose-500 font-bold leading-relaxed">
+                  કન્ફર્મ કરવા નીચેના બોક્સમાં <span className="bg-rose-500/15 px-2 py-0.5 rounded font-mono">DELETE</span> ટાઈપ કરો:
+                </p>
+                <input
+                  type="text"
+                  value={adminDeleteVerifyText}
+                  onChange={(e) => setAdminDeleteVerifyText(e.target.value)}
+                  placeholder="DELETE લખો"
+                  className="theme-input w-full px-3 py-2 text-center font-mono font-black text-rose-500 text-sm tracking-widest uppercase"
+                  autoFocus
+                />
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdminDeleteStep(1)}
+                    className="subtle-pill py-2 text-xs font-bold"
+                  >
+                    ⬅️ પાછા જાઓ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAdminConfirmDeleteOrder}
+                    disabled={adminDeleteVerifyText.trim().toUpperCase() !== "DELETE"}
+                    className={`py-2 rounded-xl text-xs font-extrabold transition ${
+                      adminDeleteVerifyText.trim().toUpperCase() === "DELETE"
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "bg-rose-600/30 text-white/50 cursor-not-allowed"
+                    }`}
+                  >
+                    🗑️ કાયમ માટે કાઢી નાખો
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
