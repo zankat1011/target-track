@@ -20,6 +20,9 @@ export function AdminApp() {
   const [finDateRange, setFinDateRange] = useState("all"); // 'today' | 'yesterday' | 'week' | 'month' | 'all' | 'custom'
   const [finFromDate, setFinFromDate] = useState("");
   const [finToDate, setFinToDate] = useState("");
+  const [hisabDepartmentTab, setHisabDepartmentTab] = useState("overall"); // 'overall' | 'student_plans' | 'seller_bazaar'
+  const [sellerTicketFilter, setSellerTicketFilter] = useState("Pending"); // 'Pending' | 'In Progress' | 'Resolved'
+  const [sellerTicketReplies, setSellerTicketReplies] = useState({});
 
   // 2-Step Verified Order Delete states (Requirement 6)
   const [adminOrderToDelete, setAdminOrderToDelete] = useState(null);
@@ -549,6 +552,34 @@ export function AdminApp() {
     triggerCelebration("🗑️ ટિકિટ સોલ્વ થઈ", "લિસ્ટમાંથી હટાવી દેવામાં આવી.");
   };
 
+  const handleUpdateSellerTicketStatus = (ticketId, newStatus) => {
+    const nextTickets = sellerTickets.map((t) =>
+      t.id === ticketId ? { ...t, status: newStatus, updatedAt: nowFormattedTimestamp() } : t
+    );
+    commitDb({ ...db, sellerTickets: nextTickets });
+    triggerCelebration("✅ સ્ટેટસ અપડેટ થયું", `ટિકિટ સ્ટેટસ '${newStatus}' થઈ ગયું.`);
+  };
+
+  const handleSendSellerTicketReply = (ticketId) => {
+    const replyText = sellerTicketReplies[ticketId]?.trim();
+    if (!replyText) return alert("જવાબ ખાલી ના હોઈ શકે.");
+    const nextTickets = sellerTickets.map((t) => {
+      if (t.id === ticketId) {
+        const replies = Array.isArray(t.adminReplies) ? [...t.adminReplies] : [];
+        replies.push({
+          id: `rep_${Date.now()}`,
+          message: replyText,
+          time: nowFormattedTimestamp(),
+        });
+        return { ...t, adminReplies: replies, status: "In Progress", updatedAt: nowFormattedTimestamp() };
+      }
+      return t;
+    });
+    commitDb({ ...db, sellerTickets: nextTickets });
+    setSellerTicketReplies((prev) => ({ ...prev, [ticketId]: "" }));
+    triggerCelebration("💬 પ્રત્યુત્તર મોકલાયો", "સેલર સુધી એડમિન જવાબ પહોંચી ગયો.");
+  };
+
   // Filtered Users
   const filteredUsers = usersArr.filter((u) => {
     const q = searchQ.toLowerCase().trim();
@@ -965,80 +996,279 @@ export function AdminApp() {
             </div>
           )}
 
-          {/* INSPECT STUDENT REPORT MODAL */}
-          {inspectedUser && (
-            <div className="one-card p-5 border-2 border-indigo-500 space-y-4 anim-fade">
-              <div
-                className="flex items-center justify-between border-b pb-2.5"
-                style={{ borderColor: "var(--border-col)" }}
-              >
-                <h3 className="text-sm font-extrabold text-indigo-500">
-                  📊 {inspectedUser.name} ({inspectedUser.mobile}) — Student Report
-                </h3>
-                <button
-                  onClick={() => setInspectedMobile(null)}
-                  className="text-xs font-extrabold px-3 py-1 rounded-full subtle-pill hover:border-indigo-500"
+          {/* ================= IN-DETAIL STUDENT REPORT MODAL ================= */}
+          {inspectedUser && (() => {
+            const studentPurchases = marketplaceOrders.filter((o) => o.buyerMobile === inspectedUser.mobile);
+
+            // Telemetry computation
+            const studyLogsCount = (inspectedUser.logs || []).length;
+            const revisionsCount = (inspectedUser.revisions || []).length;
+            const testsCount = (inspectedUser.tests || []).length;
+            const quickNotesCount = (inspectedUser.quickNotes || []).length;
+            const focusSessionsCount = Number(inspectedUser.focusSessions || 0) || Math.round((Number(inspectedUser.focusMinutes || 0)) / 25);
+            const habitsCount = Object.keys(inspectedUser.dailyHabitsLog || {}).length;
+            const bazaarPurchasesCount = studentPurchases.length;
+
+            const totalActions = studyLogsCount + revisionsCount + testsCount + quickNotesCount + focusSessionsCount + habitsCount + bazaarPurchasesCount;
+
+            const telemetryFeatures = [
+              { name: "📖 Study Logger", count: studyLogsCount, color: "bg-indigo-500" },
+              { name: "🔁 Revision Engine", count: revisionsCount, color: "bg-emerald-500" },
+              { name: "📝 Test Series", count: testsCount, color: "bg-amber-500" },
+              { name: "💡 Quick Notes", count: quickNotesCount, color: "bg-sky-500" },
+              { name: "⏱️ Focus Timer", count: focusSessionsCount, color: "bg-rose-500" },
+              { name: "🌱 Daily Habits", count: habitsCount, color: "bg-teal-500" },
+              { name: "📚 Book Bazaar", count: bazaarPurchasesCount, color: "bg-violet-500" },
+            ].map((f) => ({
+              ...f,
+              pct: totalActions > 0 ? Math.round((f.count / totalActions) * 100) : 0,
+            })).sort((a, b) => b.count - a.count);
+
+            // Test statistics
+            const tests = inspectedUser.tests || [];
+            const totalTestMarks = tests.reduce((sum, t) => sum + (Number(t.userMarks) || 0), 0);
+            const totalMaxMarks = tests.reduce((sum, t) => sum + (Number(t.totalMarks) || 0), 0);
+            const testAvgPct = totalMaxMarks > 0 ? Math.round((totalTestMarks / totalMaxMarks) * 100) : 0;
+
+            const handleToggleAllSubjects = (open) => {
+              const updated = {};
+              (inspectedUser.subjects || []).forEach((s) => {
+                updated[s.id] = open;
+              });
+              setInspectedSubAccordion(updated);
+            };
+
+            const remDays = getValidityRemainingDays(inspectedUser);
+
+            return (
+              <div className="one-card p-5 border-2 border-indigo-500 space-y-4 anim-fade shadow-xl">
+                {/* Header */}
+                <div
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3"
+                  style={{ borderColor: "var(--border-col)" }}
                 >
-                  ✕ Close
-                </button>
-              </div>
-
-              {/* Subject Breakdown with Accordions */}
-              <div className="space-y-2">
-                <div className="text-xs font-extrabold">📚 Subject Progress & Chapters</div>
-                {(inspectedUser.subjects || []).map((s) => {
-                  const isOpen = !!inspectedSubAccordion[s.id];
-                  const sDone = (s.chapters || []).filter((c) => c.completed).length;
-                  return (
-                    <div key={s.id} className="subtle-pill overflow-hidden">
-                      <div
-                        onClick={() =>
-                          setInspectedSubAccordion((prev) => ({ ...prev, [s.id]: !prev[s.id] }))
-                        }
-                        className="p-3 flex items-center justify-between cursor-pointer select-none"
-                      >
-                        <span className="font-extrabold text-xs">
-                          {isOpen ? "▼" : "▶"} {s.name}
-                        </span>
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500">
-                          {sDone}/{(s.chapters || []).length} પૂર્ણ
-                        </span>
-                      </div>
-
-                      {isOpen && (
-                        <div
-                          className="px-3 pb-3 pt-1 border-t space-y-1 anim-fade text-xs"
-                          style={{ borderColor: "var(--border-col)" }}
-                        >
-                          {(s.chapters || []).map((c) => (
-                            <div key={c.id} className="flex justify-between py-1 border-b last:border-none">
-                              <span>{c.completed ? "✅" : "⏳"} {c.name}</span>
-                              <span className="muted-text">
-                                Read: <b>{c.donePages}p</b> • Rev: <b className="text-emerald-500">{c.revisedPages || 0}p</b>
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-black text-indigo-500">
+                        📊 {inspectedUser.name}
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-bold">
+                        {inspectedUser.mobile}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Recent Logs */}
-              <div className="subtle-pill p-3 space-y-1">
-                <div className="font-extrabold text-emerald-500 mb-1 text-xs">Recent Study & Revision Logs:</div>
-                {(inspectedUser.logs || []).slice(-8).reverse().map((l) => (
-                  <div key={l.id} className="flex justify-between py-1 border-b text-[11px] last:border-none">
-                    <span>
-                      <b>{l.date}</b> — {l.subjectName} ➔ {l.chapterName}
-                    </span>
-                    <span className="font-extrabold text-emerald-500">+{l.pages}p</span>
+                    <div className="text-xs muted-text mt-0.5">
+                      લક્ષ્ય પરીક્ષા: <b>{inspectedUser.exam || "જનરલ"}</b> • વેલિડિટી:{" "}
+                      <b className={remDays > 5 ? "text-emerald-500" : "text-rose-500"}>
+                        {remDays > 0 ? `${remDays} દિવસ બાકી` : "સમાપ્ત"}
+                      </b>
+                    </div>
                   </div>
-                ))}
+
+                  <button
+                    onClick={() => setInspectedMobile(null)}
+                    className="text-xs font-black px-4 py-1.5 rounded-xl subtle-pill hover:border-indigo-500 self-start sm:self-auto cursor-pointer"
+                  >
+                    ✕ બંધ કરો (Close)
+                  </button>
+                </div>
+
+                {/* 1. Feature Usage Telemetry Bar */}
+                <div className="subtle-pill p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black flex items-center gap-1.5">
+                      <span>⚡ ફીચર વપરાશ વિશ્લેષણ (Feature Usage Telemetry)</span>
+                    </span>
+                    <span className="text-[10px] muted-text font-bold">
+                      કુલ {totalActions} પ્રવૃત્તિઓ
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] muted-text">
+                    વિદ્યાર્થી એપ્લિકેશનના કયા ટૂલનો સૌથી વધુ ઉપયોગ કરે છે તે અહીં દેખાય છે:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {telemetryFeatures.map((f, idx) => (
+                      <div key={idx} className="space-y-1 bg-black/5 dark:bg-white/5 p-2 rounded-xl">
+                        <div className="flex justify-between text-[11px] font-bold">
+                          <span>{f.name}</span>
+                          <span className="font-mono">
+                            {f.count} ({f.pct}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${f.color} transition-all duration-500`}
+                            style={{ width: `${f.pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Purchased Books History (Book Bazaar) */}
+                <div className="subtle-pill p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black flex items-center gap-1.5 text-violet-500">
+                      <span>📚 બુક બજારમાંથી ખરીદેલ પુસ્તકો (Purchased Books)</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-500">
+                      {studentPurchases.length} પુસ્તકો
+                    </span>
+                  </div>
+
+                  {studentPurchases.length === 0 ? (
+                    <div className="text-[11px] muted-text text-center py-2">
+                      આ વિદ્યાર્થીએ હજુ કોઈ પેઇડ પુસ્તક કે નોટ્સ ખરીદી નથી.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {studentPurchases.map((p) => (
+                        <div
+                          key={p.id}
+                          className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs"
+                        >
+                          <div>
+                            <div className="font-extrabold">{p.bookTitle}</div>
+                            <div className="text-[10px] muted-text mt-0.5">
+                              ઈનવોઇસ: <b className="font-mono">#{p.invoiceNo}</b> • તારીખ: {p.createdAt} • UTR:{" "}
+                              <b className="font-mono">{p.buyerUtr}</b>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <span className="font-black text-emerald-500">₹{p.bookPrice}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-extrabold">
+                              {p.status || "Verified"}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono font-bold">
+                              ડાઉનલોડ: {p.downloadCount || 0}/2
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Subject Progress & Accordions with Open/Close All */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-black">📚 વિષયવાર સિલેબસ પ્રગતિ (Subject Progress)</div>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAllSubjects(true)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md subtle-pill hover:border-indigo-500"
+                      >
+                        બધા ખોલો (Open All)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAllSubjects(false)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md subtle-pill hover:border-indigo-500"
+                      >
+                        બધા બંધ કરો (Close All)
+                      </button>
+                    </div>
+                  </div>
+
+                  {(inspectedUser.subjects || []).length === 0 ? (
+                    <div className="text-xs muted-text subtle-pill p-3 text-center">
+                      કોઈ વિષયો ઉમેરેલા નથી.
+                    </div>
+                  ) : (
+                    (inspectedUser.subjects || []).map((s) => {
+                      const isOpen = !!inspectedSubAccordion[s.id];
+                      const sDone = (s.chapters || []).filter((c) => c.completed).length;
+                      const sTotal = (s.chapters || []).length;
+                      const sPct = sTotal > 0 ? Math.round((sDone / sTotal) * 100) : 0;
+
+                      return (
+                        <div key={s.id} className="subtle-pill overflow-hidden">
+                          <div
+                            onClick={() =>
+                              setInspectedSubAccordion((prev) => ({ ...prev, [s.id]: !prev[s.id] }))
+                            }
+                            className="p-3 flex items-center justify-between cursor-pointer select-none"
+                          >
+                            <span className="font-extrabold text-xs flex items-center gap-1.5">
+                              <span>{isOpen ? "▼" : "▶"}</span>
+                              <span>{s.name}</span>
+                            </span>
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
+                              {sDone}/{sTotal} પૂર્ણ ({sPct}%)
+                            </span>
+                          </div>
+
+                          {isOpen && (
+                            <div
+                              className="px-3 pb-3 pt-1 border-t space-y-1 anim-fade text-xs"
+                              style={{ borderColor: "var(--border-col)" }}
+                            >
+                              {(s.chapters || []).map((c) => (
+                                <div key={c.id} className="flex justify-between py-1 border-b last:border-none">
+                                  <span>{c.completed ? "✅" : "⏳"} {c.name}</span>
+                                  <span className="muted-text font-mono text-[11px]">
+                                    વાંચન: <b>{c.donePages || 0}p</b> • પુનરાવર્તન:{" "}
+                                    <b className="text-emerald-500">{c.revisedPages || 0}p</b>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* 4. Test Performance & Recent Activity */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Test Summary */}
+                  <div className="subtle-pill p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-amber-500 text-xs">📝 ટેસ્ટ સીરીઝ પર્ફોર્મન્સ:</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-mono">
+                        સરેરાશ: {testAvgPct}%
+                      </span>
+                    </div>
+                    {tests.length === 0 ? (
+                      <div className="text-[11px] muted-text py-1">હજુ કોઈ મોક ટેસ્ટ આપી નથી.</div>
+                    ) : (
+                      tests.slice(-4).reverse().map((t) => (
+                        <div key={t.id} className="flex justify-between py-1 border-b text-[11px] last:border-none">
+                          <span className="truncate pr-2">{t.testName || t.subjectName}</span>
+                          <span className="font-mono font-bold text-amber-500">
+                            {t.userMarks}/{t.totalMarks}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Recent Logs */}
+                  <div className="subtle-pill p-3 space-y-1.5">
+                    <div className="font-black text-emerald-500 text-xs">
+                      📖 તાજેતરની અભ્યાસ નોંધો (Recent Logs):
+                    </div>
+                    {(inspectedUser.logs || []).length === 0 ? (
+                      <div className="text-[11px] muted-text py-1">હજુ કોઈ લોગ નથી.</div>
+                    ) : (
+                      (inspectedUser.logs || []).slice(-4).reverse().map((l) => (
+                        <div key={l.id} className="flex justify-between py-1 border-b text-[11px] last:border-none">
+                          <span className="truncate pr-2">
+                            <b>{l.date}</b>: {l.subjectName}
+                          </span>
+                          <span className="font-extrabold text-emerald-500 font-mono">+{l.pages}p</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -1553,55 +1783,192 @@ export function AdminApp() {
                       </div>
                     )}
 
-                    {/* Seller Help Desk Tickets Card */}
+                    {/* Seller Help Desk Tickets Card with Status & 1-to-1 Reply */}
                     <div className="pt-4 border-t space-y-3" style={{ borderColor: "var(--border-col)" }}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-extrabold flex items-center gap-1.5">
-                          <span>🎫 સેલર હેલ્પ ડેસ્ક ટિકિટ્સ</span>
-                        </span>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500">
-                          {sellerTickets.length} ટિકિટ્સ
-                        </span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-extrabold flex items-center gap-1.5">
+                            <span>🎫 સેલર હેલ્પ ડેસ્ક ટિકિટ્સ & 1-to-1 સપોર્ટ</span>
+                          </h4>
+                          <p className="text-[11px] muted-text">
+                            સેલરના પ્રશ્નોના સીધા જવાબ આપો અને સ્ટેટસ અપડેટ કરો.
+                          </p>
+                        </div>
+
+                        {/* Status Filter Tabs */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {["Pending", "In Progress", "Resolved"].map((st) => {
+                            const count = sellerTickets.filter((t) => (t.status || "Pending") === st).length;
+                            return (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => setSellerTicketFilter(st)}
+                                className={`px-3 py-1 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer ${
+                                  sellerTicketFilter === st
+                                    ? st === "Pending"
+                                      ? "bg-amber-500 text-white"
+                                      : st === "In Progress"
+                                      ? "bg-indigo-600 text-white"
+                                      : "bg-emerald-600 text-white"
+                                    : "subtle-pill"
+                                }`}
+                              >
+                                <span>{st}</span>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      {sellerTickets.length === 0 ? (
-                        <div className="text-xs muted-text text-center py-3">હજુ કોઈ સેલર સપોર્ટ ટિકિટ નથી.</div>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {sellerTickets.map((t) => (
-                            <div key={t.id} className="subtle-pill p-3 space-y-1.5 text-xs border-l-4 border-l-indigo-500">
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <span className="font-extrabold">{t.sellerName}</span>
-                                  <span className="text-[10px] muted-text ml-1.5 font-mono">({t.sellerMobile})</span>
-                                  <span className="ml-2 text-[9px] font-bold px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-500">
-                                    {t.category}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] muted-text">{t.createdAt}</span>
-                              </div>
-                              <p className="font-semibold text-slate-700 dark:text-slate-300 break-words">{t.message}</p>
-                              <div className="flex items-center justify-between pt-1 border-t text-[11px]" style={{ borderColor: "var(--border-col)" }}>
-                                <a
-                                  href={`https://wa.me/91${t.sellerMobile}?text=${encodeURIComponent(`Hello ${t.sellerName}, regarding your Target Book Bazaar issue: "${t.message}"`)}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-emerald-500 font-extrabold hover:underline"
-                                >
-                                  💬 WhatsApp પર જવાબ આપો
-                                </a>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSellerTicket(t.id)}
-                                  className="text-rose-500 hover:text-rose-700 font-bold"
-                                >
-                                  🗑️ સોલ્વ & ડિલીટ
-                                </button>
-                              </div>
+                      {(() => {
+                        const filteredTickets = sellerTickets.filter(
+                          (t) => (t.status || "Pending") === sellerTicketFilter
+                        );
+
+                        if (filteredTickets.length === 0) {
+                          return (
+                            <div className="text-xs muted-text text-center py-6 subtle-pill p-4">
+                              '{sellerTicketFilter}' કેટેગરીમાં કોઈ સપોર્ટ ટિકિટ નથી.
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-3">
+                            {filteredTickets.map((t) => {
+                              const curStatus = t.status || "Pending";
+                              const replies = Array.isArray(t.adminReplies) ? t.adminReplies : [];
+
+                              return (
+                                <div
+                                  key={t.id}
+                                  className={`subtle-pill p-3.5 space-y-2 text-xs border-l-4 ${
+                                    curStatus === "Pending"
+                                      ? "border-l-amber-500"
+                                      : curStatus === "In Progress"
+                                      ? "border-l-indigo-500"
+                                      : "border-l-emerald-500"
+                                  }`}
+                                >
+                                  {/* Header */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-black text-sm">{t.sellerName}</span>
+                                      <span className="text-[10px] muted-text font-mono">({t.sellerMobile})</span>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500">
+                                        {t.category || "General"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                          curStatus === "Pending"
+                                            ? "bg-amber-500/15 text-amber-500"
+                                            : curStatus === "In Progress"
+                                            ? "bg-indigo-500/15 text-indigo-500"
+                                            : "bg-emerald-500/15 text-emerald-500"
+                                        }`}
+                                      >
+                                        ● {curStatus}
+                                      </span>
+                                      <span className="text-[10px] muted-text">{t.createdAt}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Seller Query */}
+                                  <div className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 font-semibold text-slate-800 dark:text-slate-200">
+                                    {t.message}
+                                  </div>
+
+                                  {/* Admin Replies History */}
+                                  {replies.length > 0 && (
+                                    <div className="space-y-1.5 pl-3 border-l-2 border-indigo-500/40">
+                                      <div className="text-[10px] font-black text-indigo-500">
+                                        💬 અગાઉ આપેલા જવાબો (Admin Replies):
+                                      </div>
+                                      {replies.map((r, rIdx) => (
+                                        <div key={r.id || rIdx} className="text-[11px] bg-indigo-500/10 p-2 rounded-lg">
+                                          <div className="text-slate-800 dark:text-slate-200 font-bold">{r.message}</div>
+                                          <div className="text-[9px] muted-text mt-0.5 font-mono">{r.time}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* 1-to-1 Reply Input Box */}
+                                  <div className="flex gap-2 pt-1">
+                                    <input
+                                      type="text"
+                                      placeholder="સેલરને અહીંથી ડાયરેક્ટ ઉત્તર / મદદ લખો..."
+                                      value={sellerTicketReplies[t.id] || ""}
+                                      onChange={(e) =>
+                                        setSellerTicketReplies((prev) => ({ ...prev, [t.id]: e.target.value }))
+                                      }
+                                      className="flex-1 theme-input px-3 py-1.5 text-xs rounded-xl"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendSellerTicketReply(t.id)}
+                                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition cursor-pointer"
+                                    >
+                                      જવાબ મોકલો
+                                    </button>
+                                  </div>
+
+                                  {/* Actions Bar */}
+                                  <div
+                                    className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-[11px]"
+                                    style={{ borderColor: "var(--border-col)" }}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] muted-text font-bold">સ્ટેટસ બદલો:</span>
+                                      {["Pending", "In Progress", "Resolved"].map((newSt) => (
+                                        <button
+                                          key={newSt}
+                                          type="button"
+                                          disabled={curStatus === newSt}
+                                          onClick={() => handleUpdateSellerTicketStatus(t.id, newSt)}
+                                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition ${
+                                            curStatus === newSt
+                                              ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
+                                              : "subtle-pill hover:border-indigo-500 cursor-pointer"
+                                          }`}
+                                        >
+                                          {newSt}
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                      <a
+                                        href={`https://wa.me/91${t.sellerMobile}?text=${encodeURIComponent(
+                                          `Hello ${t.sellerName}, regarding your Target Book Bazaar issue: "${t.message}"`
+                                        )}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-emerald-500 font-extrabold hover:underline"
+                                      >
+                                        💬 WhatsApp ચેટ
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteSellerTicket(t.id)}
+                                        className="text-rose-500 hover:text-rose-700 font-bold cursor-pointer"
+                                      >
+                                        🗑️ ડિલીટ
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -1946,225 +2313,528 @@ export function AdminApp() {
             });
             const dayList = Object.values(dayGroups);
 
+            // Student App Plans revenue calculations
+            const paidStudents = usersArr.filter((u) => {
+              const rem = getValidityRemainingDays(u);
+              return u.status === "approved" && rem > 0;
+            });
+
+            const studentPlanLedger = paidStudents.map((u) => {
+              const rem = getValidityRemainingDays(u);
+              let tier = "6M";
+              let planName = "₹99 (6 મહિના પ્લાન)";
+              let price = 99;
+
+              if (u.planPrice) {
+                price = Number(u.planPrice);
+                planName = u.planName || `₹${price} પ્લાન`;
+                tier = price >= 999 ? "LIFETIME" : price >= 149 ? "1Y" : "6M";
+              } else if (rem > 300) {
+                tier = "LIFETIME";
+                planName = "₹999 (લાઈફટાઈમ VIP પ્લાન)";
+                price = 999;
+              } else if (rem > 180) {
+                tier = "1Y";
+                planName = "₹149 (1 વર્ષ એક્સેસ પ્લાન)";
+                price = 149;
+              }
+
+              return {
+                mobile: u.mobile,
+                name: u.name || "Student",
+                exam: u.exam || "General",
+                tier,
+                planName,
+                price,
+                remDays: rem,
+                status: u.status,
+                joinedAt: u.registeredAt || "તાજેતરમાં",
+              };
+            });
+
+            const plan6MCount = studentPlanLedger.filter((s) => s.tier === "6M").length;
+            const plan1YCount = studentPlanLedger.filter((s) => s.tier === "1Y").length;
+            const planLifeCount = studentPlanLedger.filter((s) => s.tier === "LIFETIME").length;
+
+            const totalPlanRevenue = studentPlanLedger.reduce((sum, s) => sum + s.price, 0);
+            const vipSellerFeesTotal = (db.marketplaceSubscriptions || []).reduce(
+              (sum, s) => sum + (Number(s.amount) || 500),
+              0
+            );
+
+            // Combined Net Platform Profit
+            const combinedNetProfit = totalAdminProfit + totalPlanRevenue + vipSellerFeesTotal;
+            const combinedGrossVolume = totalTurnover + totalPlanRevenue + vipSellerFeesTotal;
+
             return (
               <div className="space-y-4">
-                {/* Header & Date Range Filter Pills */}
-                <div className="one-card p-4 space-y-3 border-l-4 border-l-emerald-600">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <h2 className="text-sm font-extrabold flex items-center gap-1.5">
-                        <span>💰 હિસાબ-કિતાબ & નાણાકીય ઓડિટ રિપોર્ટ</span>
-                      </h2>
-                      <p className="text-[11px] muted-text mt-0.5">
-                        દૈનિક વેચાણ, એડમિન 10% ચોખ્ખો નફો અને સેલર ચૂકવણીનું ચોક્કસ વિશ્લેષણ.
-                      </p>
+                {/* 3 Department Partition Tabs */}
+                <div className="flex items-center gap-2 p-1.5 rounded-2xl subtle-pill overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setHisabDepartmentTab("overall")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      hisabDepartmentTab === "overall"
+                        ? "bg-emerald-600 text-white shadow-md"
+                        : "subtle-pill hover:border-emerald-500"
+                    }`}
+                  >
+                    <span>📊 સમગ્ર હિસાબ (Overall Profit)</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
+                      ₹{combinedNetProfit}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHisabDepartmentTab("student_plans")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      hisabDepartmentTab === "student_plans"
+                        ? "bg-indigo-600 text-white shadow-md"
+                        : "subtle-pill hover:border-indigo-500"
+                    }`}
+                  >
+                    <span>🎓 સ્ટુડન્ટ એપ પ્લાન્સ (₹99 / ₹149 / ₹999)</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
+                      ₹{totalPlanRevenue}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHisabDepartmentTab("seller_bazaar")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      hisabDepartmentTab === "seller_bazaar"
+                        ? "bg-violet-600 text-white shadow-md"
+                        : "subtle-pill hover:border-violet-500"
+                    }`}
+                  >
+                    <span>🤝 સેલર્સ & બુક બજાર હિસાબ</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
+                      ₹{totalAdminProfit}
+                    </span>
+                  </button>
+                </div>
+
+                {/* VIEW 1: OVERALL COMBINED PROFIT */}
+                {hisabDepartmentTab === "overall" && (
+                  <div className="space-y-4 anim-fade">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-emerald-500">
+                        <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          કુલ પ્લેટફોર્મ ચોખ્ખો નફો
+                        </div>
+                        <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                          ₹{combinedNetProfit}
+                        </div>
+                        <div className="text-[9px] muted-text font-bold">એપ પ્લાન્સ + બુક કમિશન + VIP</div>
+                      </div>
+
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-indigo-500">
+                        <div className="text-[10px] font-bold text-indigo-500">
+                          સ્ટુડન્ટ એપ સબ્સ્ક્રિપ્શન આવક
+                        </div>
+                        <div className="text-2xl font-black text-indigo-500 font-mono">
+                          ₹{totalPlanRevenue}
+                        </div>
+                        <div className="text-[9px] muted-text font-bold">
+                          {paidStudents.length} પેઇડ વિદ્યાર્થીઓ
+                        </div>
+                      </div>
+
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-violet-500">
+                        <div className="text-[10px] font-bold text-violet-500">
+                          બુક બજાર ૧૦% કમિશન નફો
+                        </div>
+                        <div className="text-2xl font-black text-violet-500 font-mono">
+                          ₹{totalAdminProfit}
+                        </div>
+                        <div className="text-[9px] muted-text font-bold">
+                          {filteredOrders.length} પુસ્તક વેચાણ
+                        </div>
+                      </div>
+
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-amber-500">
+                        <div className="text-[10px] font-bold text-amber-500">
+                          VIP સેલર ₹૫૦૦ પ્લાન આવક
+                        </div>
+                        <div className="text-2xl font-black text-amber-500 font-mono">
+                          ₹{vipSellerFeesTotal}
+                        </div>
+                        <div className="text-[9px] muted-text font-bold">
+                          {(db.marketplaceSubscriptions || []).length} સક્રિય સેલર પ્લાન
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {[
-                        { id: "today", label: "📅 આજનો હિસાબ" },
-                        { id: "yesterday", label: "⏪ ગઈકાલ" },
-                        { id: "week", label: "📊 છેલ્લા ૭ દિવસ" },
-                        { id: "month", label: "🗓️ આ મહિનો" },
-                        { id: "all", label: "♾️ ઓલ-ટાઇમ" },
-                        { id: "custom", label: "🎯 કસ્ટમ તારીખ" },
-                      ].map((chip) => (
-                        <button
-                          key={chip.id}
-                          type="button"
-                          onClick={() => setFinDateRange(chip.id)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-                            finDateRange === chip.id
-                              ? "bg-emerald-600 text-white shadow-xs"
-                              : "subtle-pill text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          {chip.label}
-                        </button>
-                      ))}
+                    {/* Revenue Sources Breakdown Card */}
+                    <div className="one-card p-5 space-y-3">
+                      <h3 className="text-xs font-black uppercase muted-text">
+                        📈 આવક સ્ત્રોત વિશ્લેષણ (Revenue Streams Breakdown)
+                      </h3>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span>🎓 વિદ્યાર્થી એપ પ્લાન આવક (₹99 / ₹149 / ₹999)</span>
+                          <span className="font-mono text-indigo-500 font-black">₹{totalPlanRevenue}</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full bg-indigo-500 rounded-full"
+                            style={{
+                              width: `${combinedNetProfit > 0 ? (totalPlanRevenue / combinedNetProfit) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex justify-between text-xs font-bold pt-2">
+                          <span>📚 બુક બજાર પ્લેટફોર્મ ૧૦% કમિશન</span>
+                          <span className="font-mono text-violet-500 font-black">₹{totalAdminProfit}</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full bg-violet-500 rounded-full"
+                            style={{
+                              width: `${combinedNetProfit > 0 ? (totalAdminProfit / combinedNetProfit) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex justify-between text-xs font-bold pt-2">
+                          <span>⭐ VIP સેલર ₹૫૦૦ ફિક્સ પ્લાન</span>
+                          <span className="font-mono text-amber-500 font-black">₹{vipSellerFeesTotal}</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full bg-amber-500 rounded-full"
+                            style={{
+                              width: `${combinedNetProfit > 0 ? (vipSellerFeesTotal / combinedNetProfit) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t flex justify-between items-center text-xs font-black" style={{ borderColor: "var(--border-col)" }}>
+                        <span>કુલ ગ્રોસ ટ્રાન્ઝેક્શન વોલ્યુમ (Gross Volume)</span>
+                        <span className="text-sm font-mono text-emerald-600 dark:text-emerald-400">
+                          ₹{combinedGrossVolume}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Custom Date Range Selectors */}
-                  {finDateRange === "custom" && (
-                    <div className="pt-2 border-t flex flex-wrap items-center gap-3 text-xs" style={{ borderColor: "var(--border-col)" }}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="muted-text font-bold">શરૂઆત તારીખ:</span>
-                        <input
-                          type="date"
-                          value={finFromDate}
-                          onChange={(e) => setFinFromDate(e.target.value)}
-                          className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
-                        />
+                {/* VIEW 2: STUDENT APP PLANS HISAB */}
+                {hisabDepartmentTab === "student_plans" && (
+                  <div className="space-y-4 anim-fade">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-sky-500">
+                        <div className="text-[10px] font-bold text-sky-500">₹99 - 6 મહિના પ્લાન</div>
+                        <div className="text-xl font-black text-sky-500 font-mono">
+                          ₹{plan6MCount * 99}
+                        </div>
+                        <div className="text-[10px] muted-text font-bold">{plan6MCount} વિદ્યાર્થીઓ</div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="muted-text font-bold">અંતિમ તારીખ:</span>
-                        <input
-                          type="date"
-                          value={finToDate}
-                          onChange={(e) => setFinToDate(e.target.value)}
-                          className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
-                        />
+
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-indigo-500">
+                        <div className="text-[10px] font-bold text-indigo-500">₹149 - 1 વર્ષ પ્લાન</div>
+                        <div className="text-xl font-black text-indigo-500 font-mono">
+                          ₹{plan1YCount * 149}
+                        </div>
+                        <div className="text-[10px] muted-text font-bold">{plan1YCount} વિદ્યાર્થીઓ</div>
                       </div>
-                      {(finFromDate || finToDate) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFinFromDate("");
-                            setFinToDate("");
-                          }}
-                          className="text-[11px] font-bold text-rose-500 underline ml-auto"
-                        >
-                          રીસેટ ફિલ્ટર
-                        </button>
+
+                      <div className="one-card p-4 space-y-1 border-l-4 border-l-amber-500">
+                        <div className="text-[10px] font-bold text-amber-500">₹999 - લાઈફટાઈમ VIP પ્લાન</div>
+                        <div className="text-xl font-black text-amber-500 font-mono">
+                          ₹{planLifeCount * 999}
+                        </div>
+                        <div className="text-[10px] muted-text font-bold">{planLifeCount} વિદ્યાર્થીઓ</div>
+                      </div>
+                    </div>
+
+                    {/* Student Subscription Ledger Table */}
+                    <div className="one-card p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-extrabold flex items-center gap-1.5">
+                          <span>📜 સક્રિય વિદ્યાર્થીઓ અને પ્લાન હિસાબ (Student Subscription Ledger)</span>
+                        </h3>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
+                          {studentPlanLedger.length} વિદ્યાર્થીઓ
+                        </span>
+                      </div>
+
+                      {studentPlanLedger.length === 0 ? (
+                        <div className="text-xs muted-text text-center py-6">
+                          હજુ સુધી કોઈ પેઇડ પ્લાન વિદ્યાર્થી નોંધાયેલ નથી.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b text-[10px] uppercase font-black muted-text" style={{ borderColor: "var(--border-col)" }}>
+                                <th className="py-2.5 px-3">વિદ્યાર્થી નામ</th>
+                                <th className="py-2.5 px-3">મોબાઈલ</th>
+                                <th className="py-2.5 px-3">લક્ષ્ય પરીક્ષા</th>
+                                <th className="py-2.5 px-3">પ્લાન</th>
+                                <th className="py-2.5 px-3 text-right">રકમ (₹)</th>
+                                <th className="py-2.5 px-3 text-center">બાકી દિવસો</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y" style={{ borderColor: "var(--border-col)" }}>
+                              {studentPlanLedger.map((s, idx) => (
+                                <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                                  <td className="py-2.5 px-3 font-extrabold">{s.name}</td>
+                                  <td className="py-2.5 px-3 font-mono muted-text">{s.mobile}</td>
+                                  <td className="py-2.5 px-3 font-semibold">{s.exam}</td>
+                                  <td className="py-2.5 px-3">
+                                    <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-500 text-[10px] font-extrabold">
+                                      {s.planName}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black font-mono">₹{s.price}</td>
+                                  <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-500">
+                                    {s.remDays}d
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 font-black text-xs bg-black/5 dark:bg-white/5" style={{ borderColor: "var(--border-col)" }}>
+                                <td colSpan="4" className="py-3 px-3 uppercase">કુલ સ્ટુડન્ટ પ્લાન આવક</td>
+                                <td className="py-3 px-3 text-right font-mono text-indigo-500">₹{totalPlanRevenue}</td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-
-                {/* 5 KPI Cards for Financial Audit */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  <div className="one-card p-3.5 space-y-1">
-                    <div className="text-[10px] font-bold muted-text">કુલ ટર્નઓવર (Gross)</div>
-                    <div className="text-xl font-black text-slate-800 dark:text-slate-100">
-                      ₹{totalTurnover}
-                    </div>
-                    <div className="text-[9px] text-indigo-500 font-extrabold">{filteredOrders.length} ઓર્ડર્સ</div>
                   </div>
+                )}
 
-                  <div className="one-card p-3.5 space-y-1 border-l-4 border-l-emerald-500">
-                    <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">એડમિન ચોખ્ખો નફો (10%)</div>
-                    <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-                      ₹{totalAdminProfit}
-                    </div>
-                    <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold">પ્લેટફોર્મ કમાણી</div>
-                  </div>
-
-                  <div className="one-card p-3.5 space-y-1">
-                    <div className="text-[10px] font-bold muted-text">સેલર્સ હિસ્સો (90%)</div>
-                    <div className="text-xl font-black text-violet-500">
-                      ₹{totalSellerShare}
-                    </div>
-                    <div className="text-[9px] muted-text font-bold">વિદ્યાર્થી કમાણી</div>
-                  </div>
-
-                  <div className="one-card p-3.5 space-y-1">
-                    <div className="text-[10px] font-bold muted-text">કુલ ચૂકવાયેલ રકમ</div>
-                    <div className="text-xl font-black text-blue-500">
-                      ₹{totalDisbursed}
-                    </div>
-                    <div className="text-[9px] text-blue-500 font-extrabold">પેઆઉટ્સ પૂર્ણ</div>
-                  </div>
-
-                  <div className="one-card p-3.5 space-y-1 col-span-2 sm:col-span-1 border-l-4 border-l-amber-500">
-                    <div className="text-[10px] font-bold text-amber-500">બાકી વૉલેટ જવાબદારી</div>
-                    <div className="text-xl font-black text-amber-500">
-                      ₹{pendingLiability}
-                    </div>
-                    <div className="text-[9px] text-amber-500 font-extrabold">સેલર લેણું બાકી</div>
-                  </div>
-                </div>
-
-                {/* Day-by-Day Itemized Analysis Table (Requirement 10) */}
-                <div className="one-card p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-extrabold flex items-center gap-1.5">
-                      <span>📅 તારીખ મુજબ દૈનિક હિસાબ (Day-by-Day Breakdown)</span>
-                    </span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
-                      {dayList.length} દિવસો રેકોર્ડ
-                    </span>
-                  </div>
-
-                  {dayList.length === 0 ? (
-                    <div className="text-xs muted-text text-center py-6">
-                      પસંદ કરેલ સમયગાળામાં કોઈ વેરિફાઈડ ઓર્ડર્સ મળ્યા નથી.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="border-b text-[10px] uppercase font-black muted-text" style={{ borderColor: "var(--border-col)" }}>
-                            <th className="py-2.5 px-3">તારીખ</th>
-                            <th className="py-2.5 px-3 text-center">ઓર્ડર્સ સંખ્યા</th>
-                            <th className="py-2.5 px-3 text-right">ગ્રોસ વેચાણ (₹)</th>
-                            <th className="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400">એડમિન કમિશન (10%)</th>
-                            <th className="py-2.5 px-3 text-right text-violet-500">સેલર જમા (90%)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y" style={{ borderColor: "var(--border-col)" }}>
-                          {dayList.map((d, idx) => (
-                            <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
-                              <td className="py-2.5 px-3 font-extrabold">{d.date}</td>
-                              <td className="py-2.5 px-3 text-center font-bold">
-                                <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
-                                  {d.ordersCount}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-black">₹{d.grossVolume}</td>
-                              <td className="py-2.5 px-3 text-right font-black text-emerald-600 dark:text-emerald-400">
-                                +₹{d.adminCut}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-black text-violet-500">
-                                ₹{d.sellerCut}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 font-black text-xs bg-black/5 dark:bg-white/5" style={{ borderColor: "var(--border-col)" }}>
-                            <td className="py-3 px-3 uppercase">કુલ સરવાળો (Total)</td>
-                            <td className="py-3 px-3 text-center">{filteredOrders.length} ઓર્ડર્સ</td>
-                            <td className="py-3 px-3 text-right">₹{totalTurnover}</td>
-                            <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400">₹{totalAdminProfit}</td>
-                            <td className="py-3 px-3 text-right text-violet-500">₹{totalSellerShare}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                {/* Detailed Itemized Transactions Ledger */}
-                <div className="one-card p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-extrabold flex items-center gap-1.5">
-                      <span>📜 ઓર્ડરવાર વિસ્તૃત લેજર (Itemized Transactions)</span>
-                    </span>
-                    <span className="text-[10px] font-bold muted-text">{filteredOrders.length} વ્યવહારો</span>
-                  </div>
-
-                  {filteredOrders.length === 0 ? (
-                    <div className="text-xs muted-text text-center py-4">કોઈ લેવડ-દેવડ નથી.</div>
-                  ) : (
-                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                      {filteredOrders.map((o) => (
-                        <div
-                          key={o.id}
-                          className="subtle-pill p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                        >
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold">{o.bookTitle}</span>
-                              <span className="text-[10px] font-mono muted-text">#{o.invoiceNo}</span>
-                            </div>
-                            <div className="text-[10px] muted-text">
-                              ખરીદનાર: <b>{o.buyerName}</b> ({o.buyerMobile}) • સેલર: <b>{o.sellerMobile}</b> • તારીખ: {o.createdAt}
-                            </div>
-                            <div className="text-[10px] font-mono text-indigo-500">UTR: {o.buyerUtr}</div>
-                          </div>
-
-                          <div className="text-right sm:shrink-0">
-                            <div className="font-black text-sm">₹{o.bookPrice}</div>
-                            <div className="text-[10px] text-emerald-500 font-extrabold">
-                              કમિશન: ₹{o.adminFee} | સેલર: ₹{o.sellerPayout}
-                            </div>
-                          </div>
+                {/* VIEW 3: SELLER & BOOK BAZAAR HISAB */}
+                {hisabDepartmentTab === "seller_bazaar" && (
+                  <div className="space-y-4 anim-fade">
+                    {/* Header & Date Range Filter Pills */}
+                    <div className="one-card p-4 space-y-3 border-l-4 border-l-emerald-600">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h2 className="text-sm font-extrabold flex items-center gap-1.5">
+                            <span>💰 સેલર્સ & બુક બજાર હિસાબ (Marketplace Ledger)</span>
+                          </h2>
+                          <p className="text-[11px] muted-text mt-0.5">
+                            દૈનિક પુસ્તક વેચાણ, એડમિન ૧૦% ચોખ્ખો નફો અને સેલર ચૂકવણીનું ચોક્કસ વિશ્લેષણ.
+                          </p>
                         </div>
-                      ))}
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {[
+                            { id: "today", label: "📅 આજનો હિસાબ" },
+                            { id: "yesterday", label: "⏪ ગઈકાલ" },
+                            { id: "week", label: "📊 છેલ્લા ૭ દિવસ" },
+                            { id: "month", label: "🗓️ આ મહિનો" },
+                            { id: "all", label: "♾️ ઓલ-ટાઇમ" },
+                            { id: "custom", label: "🎯 કસ્ટમ તારીખ" },
+                          ].map((chip) => (
+                            <button
+                              key={chip.id}
+                              type="button"
+                              onClick={() => setFinDateRange(chip.id)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                                finDateRange === chip.id
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "subtle-pill text-slate-700 dark:text-slate-300"
+                              }`}
+                            >
+                              {chip.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Custom Date Range Selectors */}
+                      {finDateRange === "custom" && (
+                        <div className="pt-2 border-t flex flex-wrap items-center gap-3 text-xs" style={{ borderColor: "var(--border-col)" }}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="muted-text font-bold">શરૂઆત તારીખ:</span>
+                            <input
+                              type="date"
+                              value={finFromDate}
+                              onChange={(e) => setFinFromDate(e.target.value)}
+                              className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="muted-text font-bold">અંતિમ તારીખ:</span>
+                            <input
+                              type="date"
+                              value={finToDate}
+                              onChange={(e) => setFinToDate(e.target.value)}
+                              className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
+                            />
+                          </div>
+                          {(finFromDate || finToDate) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFinFromDate("");
+                                setFinToDate("");
+                              }}
+                              className="text-[11px] font-bold text-rose-500 underline ml-auto cursor-pointer"
+                            >
+                              રીસેટ ફિલ્ટર
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+
+                    {/* 5 KPI Cards for Financial Audit */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                      <div className="one-card p-3.5 space-y-1">
+                        <div className="text-[10px] font-bold muted-text">કુલ ટર્નઓવર (Gross)</div>
+                        <div className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">
+                          ₹{totalTurnover}
+                        </div>
+                        <div className="text-[9px] text-indigo-500 font-extrabold">{filteredOrders.length} ઓર્ડર્સ</div>
+                      </div>
+
+                      <div className="one-card p-3.5 space-y-1 border-l-4 border-l-emerald-500">
+                        <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">એડમિન ચોખ્ખો નફો (10%)</div>
+                        <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                          ₹{totalAdminProfit}
+                        </div>
+                        <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold">પ્લેટફોર્મ કમાણી</div>
+                      </div>
+
+                      <div className="one-card p-3.5 space-y-1">
+                        <div className="text-[10px] font-bold muted-text">સેલર્સ હિસ્સો (90%)</div>
+                        <div className="text-xl font-black text-violet-500 font-mono">
+                          ₹{totalSellerShare}
+                        </div>
+                        <div className="text-[9px] muted-text font-bold">વિદ્યાર્થી કમાણી</div>
+                      </div>
+
+                      <div className="one-card p-3.5 space-y-1">
+                        <div className="text-[10px] font-bold muted-text">કુલ ચૂકવાયેલ રકમ</div>
+                        <div className="text-xl font-black text-blue-500 font-mono">
+                          ₹{totalDisbursed}
+                        </div>
+                        <div className="text-[9px] text-blue-500 font-extrabold">પેઆઉટ્સ પૂર્ણ</div>
+                      </div>
+
+                      <div className="one-card p-3.5 space-y-1 col-span-2 sm:col-span-1 border-l-4 border-l-amber-500">
+                        <div className="text-[10px] font-bold text-amber-500">બાકી વૉલેટ જવાબદારી</div>
+                        <div className="text-xl font-black text-amber-500 font-mono">
+                          ₹{pendingLiability}
+                        </div>
+                        <div className="text-[9px] text-amber-500 font-extrabold">સેલર લેણું બાકી</div>
+                      </div>
+                    </div>
+
+                    {/* Day-by-Day Itemized Analysis Table (Requirement 10) */}
+                    <div className="one-card p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-extrabold flex items-center gap-1.5">
+                          <span>📅 તારીખ મુજબ દૈનિક હિસાબ (Day-by-Day Breakdown)</span>
+                        </span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                          {dayList.length} દિવસો રેકોર્ડ
+                        </span>
+                      </div>
+
+                      {dayList.length === 0 ? (
+                        <div className="text-xs muted-text text-center py-6">
+                          પસંદ કરેલ સમયગાળામાં કોઈ વેરિફાઈડ ઓર્ડર્સ મળ્યા નથી.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b text-[10px] uppercase font-black muted-text" style={{ borderColor: "var(--border-col)" }}>
+                                <th className="py-2.5 px-3">તારીખ</th>
+                                <th className="py-2.5 px-3 text-center">ઓર્ડર્સ સંખ્યા</th>
+                                <th className="py-2.5 px-3 text-right">ગ્રોસ વેચાણ (₹)</th>
+                                <th className="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400">એડમિન કમિશન (10%)</th>
+                                <th className="py-2.5 px-3 text-right text-violet-500">સેલર જમા (90%)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y" style={{ borderColor: "var(--border-col)" }}>
+                              {dayList.map((d, idx) => (
+                                <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
+                                  <td className="py-2.5 px-3 font-extrabold">{d.date}</td>
+                                  <td className="py-2.5 px-3 text-center font-bold">
+                                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
+                                      {d.ordersCount}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black font-mono">₹{d.grossVolume}</td>
+                                  <td className="py-2.5 px-3 text-right font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                                    +₹{d.adminCut}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black text-violet-500 font-mono">
+                                    ₹{d.sellerCut}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 font-black text-xs bg-black/5 dark:bg-white/5" style={{ borderColor: "var(--border-col)" }}>
+                                <td className="py-3 px-3 uppercase">કુલ સરવાળો (Total)</td>
+                                <td className="py-3 px-3 text-center">{filteredOrders.length} ઓર્ડર્સ</td>
+                                <td className="py-3 px-3 text-right font-mono">₹{totalTurnover}</td>
+                                <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400 font-mono">₹{totalAdminProfit}</td>
+                                <td className="py-3 px-3 text-right text-violet-500 font-mono">₹{totalSellerShare}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Detailed Itemized Transactions Ledger */}
+                    <div className="one-card p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-extrabold flex items-center gap-1.5">
+                          <span>📜 ઓર્ડરવાર વિસ્તૃત લેજર (Itemized Transactions)</span>
+                        </span>
+                        <span className="text-[10px] font-bold muted-text">{filteredOrders.length} વ્યવહારો</span>
+                      </div>
+
+                      {filteredOrders.length === 0 ? (
+                        <div className="text-xs muted-text text-center py-4">કોઈ લેવડ-દેવડ નથી.</div>
+                      ) : (
+                        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                          {filteredOrders.map((o) => (
+                            <div
+                              key={o.id}
+                              className="subtle-pill p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-extrabold">{o.bookTitle}</span>
+                                  <span className="text-[10px] font-mono muted-text">#{o.invoiceNo}</span>
+                                </div>
+                                <div className="text-[10px] muted-text">
+                                  ખરીદનાર: <b>{o.buyerName}</b> ({o.buyerMobile}) • સેલર: <b>{o.sellerMobile}</b> • તારીખ: {o.createdAt}
+                                </div>
+                                <div className="text-[10px] font-mono text-indigo-500">UTR: {o.buyerUtr}</div>
+                              </div>
+
+                              <div className="text-right sm:shrink-0">
+                                <div className="font-black text-sm font-mono">₹{o.bookPrice}</div>
+                                <div className="text-[10px] text-emerald-500 font-extrabold">
+                                  કમિશન: ₹{o.adminFee} | સેલર: ₹{o.sellerPayout}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}

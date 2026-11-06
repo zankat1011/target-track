@@ -204,6 +204,29 @@ function loadLocalDB() {
   };
 }
 
+// Safe user state merge with lastResetAt and lastUpdatedAt timestamp lock
+const mergeUserSafely = (localUser, cloudUser) => {
+  if (!localUser) return cloudUser;
+  if (!cloudUser) return localUser;
+
+  // CRITICAL FIX: If localUser has been reset/cleared (lastResetAt higher),
+  // do NOT reload old subjects/logs/tests from cloud!
+  const localReset = Number(localUser.lastResetAt || 0);
+  const cloudReset = Number(cloudUser.lastResetAt || 0);
+
+  if (localReset > cloudReset) {
+    return localUser; // Keep wiped clean state and overwrite cloud
+  }
+  if (cloudReset > localReset) {
+    return cloudUser;
+  }
+
+  // Normal state: respect latest modification timestamp
+  const localUpdated = Number(localUser.lastUpdatedAt || 0);
+  const cloudUpdated = Number(cloudUser.lastUpdatedAt || 0);
+  return localUpdated >= cloudUpdated ? localUser : cloudUser;
+};
+
 export function StudyProvider({ children }) {
   const { session, isDemoMode } = useAuth();
   const [db, setDb] = useState(loadLocalDB);
@@ -250,8 +273,10 @@ export function StudyProvider({ children }) {
       setDb(prev => {
         const merged = { ...prev };
         if (cloudData.users) {
-          Object.keys(cloudData.users).forEach(mob => {
-            merged.users[mob] = normalizeUserObject(cloudData.users[mob]);
+          Object.keys(cloudData.users).forEach((mob) => {
+            const cloudUser = normalizeUserObject(cloudData.users[mob]);
+            const localUser = merged.users[mob];
+            merged.users[mob] = mergeUserSafely(localUser, cloudUser);
           });
         }
         if (Array.isArray(cloudData.feedbacks)) merged.feedbacks = cloudData.feedbacks;
@@ -339,6 +364,7 @@ export function StudyProvider({ children }) {
       const copy = JSON.parse(JSON.stringify(prev));
       const user = copy.users[session.mobile] || {};
       updaterFn(user);
+      user.lastUpdatedAt = Date.now();
 
       // Keep active exam in sync
       if (Array.isArray(user.exams)) {
@@ -398,8 +424,10 @@ export function StudyProvider({ children }) {
     const user = db.users[session.mobile];
     if (!user) return;
 
+    const resetStamp = Date.now();
+
     const archiveItem = {
-      archiveId: `arch_${Date.now()}`,
+      archiveId: `arch_${resetStamp}`,
       deletedAt: nowFormattedTimestamp(),
       deletedBy: "Student (Self Clear)",
       mobile: user.mobile,
@@ -446,6 +474,8 @@ export function StudyProvider({ children }) {
         }
       ];
       clearedUser.activeExamId = "ex_main";
+      clearedUser.lastResetAt = resetStamp;
+      clearedUser.lastUpdatedAt = resetStamp;
     }
 
     setDb(nextDb);

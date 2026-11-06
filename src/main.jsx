@@ -4,17 +4,20 @@ import App from "./App";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { StudyProvider } from "./context/StudyContext";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <AuthProvider>
-        <StudyProvider>
-          <App />
-        </StudyProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <StudyProvider>
+            <App />
+          </StudyProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
 

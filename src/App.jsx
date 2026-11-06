@@ -11,6 +11,7 @@ import { DesktopSidebar } from "./components/layout/DesktopSidebar";
 import { DesktopTopBar } from "./components/layout/DesktopTopBar";
 import { ToastAndConfetti } from "./components/common/ToastAndConfetti";
 import { PwaInstallBanner } from "./components/common/PwaInstallBanner";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 
 // Core Primary Screens (Eager loaded)
 import { AuthScreen } from "./components/auth/AuthScreen";
@@ -92,10 +93,12 @@ export function App() {
   // Admin session -> Show Admin App (Lazy loaded)
   if (session?.role === "admin") {
     return (
-      <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-extrabold text-sm muted-text">⚡ Loading Admin...</div>}>
-        <AdminApp />
-        <ToastAndConfetti />
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-extrabold text-sm muted-text">⚡ Loading Admin...</div>}>
+          <AdminApp />
+          <ToastAndConfetti />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 

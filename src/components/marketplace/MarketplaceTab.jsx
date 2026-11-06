@@ -576,6 +576,42 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     triggerCelebration("📩 સપોર્ટ ટિકિટ મોકલાઈ!", "એડમિન ટૂંક સમયમાં તમને જવાબ આપશે.");
   };
 
+  // Seller Book Controls: Pause / Resume Listing
+  const handleToggleBookStatus = (bookId) => {
+    const nextBooks = (db.marketplaceBooks || []).map((b) => {
+      if (b.id === bookId) {
+        const nextStatus = b.status === "Approved" ? "Paused" : "Approved";
+        return { ...b, status: nextStatus };
+      }
+      return b;
+    });
+    commitDb({ ...db, marketplaceBooks: nextBooks });
+    triggerCelebration("🔄 પુસ્તક સ્ટેટસ અપડેટ", "લિસ્ટિંગ સ્ટેટસ સફળતાપૂર્વક બદલાઈ ગયું.");
+  };
+
+  // Seller Book Controls: Quick Edit Price
+  const handleEditBookPrice = (bookId, currentPrice) => {
+    const newPriceStr = window.prompt("પુસ્તકની નવી કિંમત (₹) લખો:", currentPrice);
+    if (!newPriceStr) return;
+    const newPrice = Number(newPriceStr);
+    if (isNaN(newPrice) || newPrice <= 0) return alert("કૃપા કરીને માન્ય કિંમત લખો.");
+    const nextBooks = (db.marketplaceBooks || []).map((b) => {
+      if (b.id === bookId) {
+        const isVip = b.sellerPlan === "fixed_500";
+        const fee = isVip ? 0 : Math.round(newPrice * 0.1);
+        return {
+          ...b,
+          price: newPrice,
+          adminFee: fee,
+          sellerPayout: newPrice - fee,
+        };
+      }
+      return b;
+    });
+    commitDb({ ...db, marketplaceBooks: nextBooks });
+    triggerCelebration("✏️ કિંમત અપડેટ થઈ!", `નવી કિંમત ₹${newPrice} સફળતાપૂર્વક સેટ થઈ.`);
+  };
+
   return (
     <div id="tab-marketplace" className="space-y-4 anim-fade">
       {/* Top Banner & Header */}
@@ -1603,6 +1639,209 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                     📩 સપોર્ટ ટિકિટ મોકલો
                   </button>
                 </form>
+              </div>
+
+              {/* SELLER SUPPORT TICKET HISTORY & ADMIN REPLIES */}
+              <div className="one-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase muted-text flex items-center gap-1.5">
+                    <span>🎫 મારી સપોર્ટ ટિકિટ્સ & એડમિન જવાબો</span>
+                  </h3>
+                  <span className="text-[10px] muted-text font-bold">
+                    {(db.sellerTickets || []).filter((t) => t.sellerMobile === userMobile).length} ટિકિટ્સ
+                  </span>
+                </div>
+
+                {(() => {
+                  const myTickets = (db.sellerTickets || []).filter((t) => t.sellerMobile === userMobile);
+                  if (myTickets.length === 0) {
+                    return (
+                      <div className="text-[11px] muted-text text-center py-3 subtle-pill p-3">
+                        તમે હજુ સુધી કોઈ સપોર્ટ ટિકિટ મોકલી નથી.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2.5">
+                      {myTickets.map((t) => {
+                        const curStatus = t.status || "Pending";
+                        const replies = Array.isArray(t.adminReplies) ? t.adminReplies : [];
+
+                        return (
+                          <div
+                            key={t.id}
+                            className={`subtle-pill p-3 space-y-2 text-xs border-l-4 ${
+                              curStatus === "Pending"
+                                ? "border-l-amber-500"
+                                : curStatus === "In Progress"
+                                ? "border-l-indigo-500"
+                                : "border-l-emerald-500"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="font-extrabold">{t.category || "General Query"}</span>
+                                <div className="text-[10px] muted-text mt-0.5">{t.createdAt}</div>
+                              </div>
+                              <span
+                                className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                  curStatus === "Pending"
+                                    ? "bg-amber-500/15 text-amber-500"
+                                    : curStatus === "In Progress"
+                                    ? "bg-indigo-500/15 text-indigo-500"
+                                    : "bg-emerald-500/15 text-emerald-500"
+                                }`}
+                              >
+                                ● {curStatus}
+                              </span>
+                            </div>
+
+                            <p className="font-semibold text-slate-700 dark:text-slate-300 break-words">
+                              {t.message}
+                            </p>
+
+                            {replies.length > 0 ? (
+                              <div className="space-y-1.5 pl-3 border-l-2 border-indigo-500/40 pt-1">
+                                <div className="text-[10px] font-black text-indigo-500">
+                                  💬 એડમિન પ્રત્યુત્તર (Admin Reply):
+                                </div>
+                                {replies.map((r, rIdx) => (
+                                    <div key={r.id || rIdx} className="text-[11px] bg-indigo-500/10 p-2 rounded-lg">
+                                      <div className="text-slate-800 dark:text-slate-200 font-bold">{r.message}</div>
+                                      <div className="text-[9px] muted-text mt-0.5 font-mono">{r.time}</div>
+                                    </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-amber-500 font-bold pt-1">
+                                ⏳ એડમિન ટીમ તમારી ટિકિટની સમીક્ષા કરી રહી છે...
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* SELLER BOOK PERFORMANCE & INVENTORY MANAGER */}
+              <div className="one-card p-4 space-y-3 border-2 border-indigo-500/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                      <span>📚 મારું પુસ્તક લિસ્ટિંગ મેનેજમેન્ટ (My Books & Inventory)</span>
+                    </h3>
+                    <p className="text-[10px] muted-text mt-0.5">
+                      તમારા લિસ્ટેડ પુસ્તકોનું વેચાણ, કિંમત બદલો અથવા લિસ્ટિંગ પોઝ (Pause) કરો.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
+                    {books.filter((b) => b.sellerMobile === userMobile).length} પુસ્તકો
+                  </span>
+                </div>
+
+                {(() => {
+                  const myBooks = books.filter((b) => b.sellerMobile === userMobile);
+
+                  if (myBooks.length === 0) {
+                    return (
+                      <div className="text-[11px] muted-text text-center py-4 subtle-pill p-3">
+                        હજુ તમે કોઈ પુસ્તક પ્રકાશિત કર્યું નથી. ઉપરના ફોર્મમાંથી પહેલું પુસ્તક લિસ્ટ કરો!
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2.5">
+                      {myBooks.map((b) => {
+                        const isApproved = b.status === "Approved";
+                        const isPaused = b.status === "Paused";
+                        const bookOrders = orders.filter((o) => o.bookId === b.id && o.status === "Verified");
+                        const bookSalesCount = bookOrders.length || b.salesCount || 0;
+                        const bookEarnings = bookOrders.reduce((sum, o) => sum + (Number(o.sellerPayout) || 0), 0);
+                        const isVip = b.sellerPlan === "fixed_500";
+
+                        return (
+                          <div
+                            key={b.id}
+                            className="subtle-pill p-3.5 space-y-2 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              {b.coverImage ? (
+                                <img
+                                  src={b.coverImage}
+                                  alt={b.title}
+                                  className="w-12 h-14 object-cover rounded-lg border border-black/10 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-12 h-14 rounded-lg bg-indigo-500/15 text-indigo-500 flex items-center justify-center text-xl shrink-0">
+                                  📖
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-extrabold">{b.title}</span>
+                                  <span
+                                    className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                      isApproved
+                                        ? "bg-emerald-500/15 text-emerald-500"
+                                        : isPaused
+                                        ? "bg-amber-500/15 text-amber-500"
+                                        : "bg-blue-500/15 text-blue-500"
+                                    }`}
+                                  >
+                                    ● {b.status}
+                                  </span>
+                                  {isVip && (
+                                    <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-amber-400 text-slate-900">
+                                      👑 VIP 0%
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] muted-text mt-0.5">
+                                  વિષય: <b>{b.subject || b.exam}</b> • વેચાણ:{" "}
+                                  <b className="text-emerald-500">{bookSalesCount} નકલ</b> • કમાણી:{" "}
+                                  <b className="text-emerald-500 font-mono">₹{bookEarnings}</b>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                              <div className="text-right mr-1">
+                                <div className="font-black text-sm font-mono">₹{b.price}</div>
+                                <div className="text-[9px] muted-text">
+                                  {isVip ? "0% કમિશન" : "10% કટ"}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleEditBookPrice(b.id, b.price)}
+                                className="px-2.5 py-1.5 rounded-xl subtle-pill hover:border-indigo-500 text-[11px] font-black cursor-pointer transition"
+                              >
+                                ✏️ કિંમત બદલો
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleBookStatus(b.id)}
+                                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black cursor-pointer transition ${
+                                  isPaused
+                                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                    : "subtle-pill text-amber-500 hover:border-amber-500"
+                                }`}
+                              >
+                                {isPaused ? "▶️ ચાલુ કરો" : "⏸️ પોઝ કરો"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
