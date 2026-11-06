@@ -600,19 +600,22 @@ export function AdminApp() {
       </header>
 
       {/* Admin Nav Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 subtle-pill p-1">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 subtle-pill p-1">
         {[
           { id: "dashboard", label: "📊 Overview" },
           { id: "users", label: "👥 Users" },
           { id: "marketplace", label: "📚 Book Bazaar" },
+          { id: "financials", label: "💰 હિસાબ-કિતાબ" },
           { id: "tools", label: "📢 Broadcast" },
           { id: "feedback", label: "🛠️ Reports" },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActivePage(tab.id)}
-            className={`py-2 rounded-xl text-xs font-extrabold transition ${
-              activePage === tab.id ? "bg-indigo-600 text-white shadow-sm" : "muted-text"
+            className={`py-2 rounded-xl text-xs font-black transition ${
+              activePage === tab.id
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "muted-text hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             {tab.label}
@@ -1187,6 +1190,27 @@ export function AdminApp() {
                     <div className="text-xl font-extrabold text-emerald-500">₹{totalCommissionEarned}</div>
                     <div className="text-[9px] text-emerald-500 font-extrabold">ચોખ્ખો નફો</div>
                   </div>
+                </div>
+
+                {/* Financial Audit Quick Access Banner */}
+                <div className="one-card p-3.5 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border-2 border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      <span>💰</span>
+                      <span>હિસાબ-કિતાબ & દૈનિક રિપોર્ટ એનાલિસિસ (Day Report & Date Range Audit)</span>
+                    </span>
+                    <p className="text-[10px] muted-text font-bold">
+                      આજનો હિસાબ, ગઈકાલ, ૭ દિવસ, મહિનો કે કસ્ટમ તારીખ મુજબ દૈનિક ટર્નઓવર અને ૧૦% ચોખ્ખો નફો જુઓ.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActivePage("financials")}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-4 py-2 rounded-xl text-xs shadow-sm transition shrink-0 flex items-center gap-1.5"
+                  >
+                    <span>📊</span>
+                    <span>ખોલો હિસાબ-કિતાબ ડેશબોર્ડ ➔</span>
+                  </button>
                 </div>
 
                 {/* Sub-Nav Bar inside Book Bazaar (Requirement 5) */}
