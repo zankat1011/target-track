@@ -68,9 +68,14 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
   }, [pomoRunning, pomoPreset, updateCurrentUser, triggerCelebration]);
 
   const handleSetPomoPreset = (mins) => {
+    const val = Math.max(1, Math.min(360, Number(mins) || 25));
     setPomoRunning(false);
-    setPomoPreset(mins);
-    setPomoSeconds(mins * 60);
+    setPomoPreset(val);
+    setPomoSeconds(val * 60);
+  };
+
+  const handleAdjustPomo = (delta) => {
+    handleSetPomoPreset(pomoPreset + delta);
   };
 
   const handleTogglePomo = () => {
@@ -212,9 +217,29 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
     reader.readAsText(file);
   };
 
+  // Delete My Bug / Feature Report
+  const handleDeleteMyReport = (fbId) => {
+    if (!window.confirm("શું તમે આ રિપોર્ટ કાઢી નાખવા માંગો છો?")) return;
+    const updated = (db.feedbacks || []).filter(
+      (f) => !(f.id === fbId && f.mobile === currentUser?.mobile)
+    );
+    commitDb({
+      ...db,
+      feedbacks: updated,
+    });
+    triggerCelebration("🗑️ રિપોર્ટ ડિલીટ થયો", "તમારો રિપોર્ટ લિસ્ટમાંથી હટાવી દેવામાં આવ્યો છે.");
+  };
+
   // Clear All My Data (Working 2-Step In-App Modal)
   const handleClearAllData = () => {
     setShowClearModal(true);
+  };
+
+  const handleClearAllDataConfirm = () => {
+    setPomoRunning(false);
+    setPomoPreset(25);
+    setPomoSeconds(25 * 60);
+    clearCurrentUserData();
   };
 
   const valLeft = getValidityRemainingDays(currentUser);
@@ -247,12 +272,46 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Custom Any Minutes Box (-5, number, +5) */}
+          <div
+            className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-2xl border"
+            style={{ borderColor: "var(--border-col)" }}
+          >
+            <button
+              type="button"
+              onClick={() => handleAdjustPomo(-5)}
+              className="w-7 h-7 flex items-center justify-center rounded-xl bg-white dark:bg-stone-800 text-xs font-black shadow-xs hover:border-indigo-500 transition"
+              title="-5 mins"
+            >
+              −5
+            </button>
+            <input
+              type="number"
+              min="1"
+              max="360"
+              value={pomoPreset}
+              onChange={(e) => handleSetPomoPreset(e.target.value)}
+              className="w-12 text-center text-xs font-black bg-transparent border-0 focus:outline-none"
+              title="Custom Minutes (game te minute)"
+            />
+            <span className="text-[10px] font-bold muted-text pr-1">m</span>
+            <button
+              type="button"
+              onClick={() => handleAdjustPomo(5)}
+              className="w-7 h-7 flex items-center justify-center rounded-xl bg-white dark:bg-stone-800 text-xs font-black shadow-xs hover:border-indigo-500 transition"
+              title="+5 mins"
+            >
+              +5
+            </button>
+          </div>
+
           {[15, 25, 45, 60].map((mins) => (
             <button
               key={mins}
+              type="button"
               onClick={() => handleSetPomoPreset(mins)}
               className={`subtle-pill px-2.5 py-1 text-[10px] font-extrabold transition ${
-                pomoPreset === mins && !pomoRunning ? "border-indigo-500 text-indigo-500" : ""
+                pomoPreset === mins && !pomoRunning ? "border-indigo-500 text-indigo-500 font-black" : ""
               }`}
             >
               {mins}m
@@ -261,12 +320,14 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
 
           <div className="ml-auto flex gap-1.5">
             <button
+              type="button"
               onClick={handleTogglePomo}
               className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold px-4 py-1.5 rounded-full shadow-sm transition"
             >
               {pomoRunning ? "⏸ Pause" : "▶ Start"}
             </button>
             <button
+              type="button"
               onClick={handleResetPomo}
               className="subtle-pill text-xs font-bold px-2.5 py-1.5 hover:border-indigo-500"
             >
@@ -549,7 +610,17 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
                       <span className="text-[10px] font-extrabold text-indigo-500">
                         [{f.type}] • <span className="muted-text font-normal">{f.date}</span>
                       </span>
-                      {stBadge}
+                      <div className="flex items-center gap-1.5">
+                        {stBadge}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMyReport(f.id)}
+                          className="text-rose-500 hover:text-rose-700 p-1 text-xs transition"
+                          title="આ રિપોર્ટ કાઢી નાખો"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                     <div className="font-semibold text-xs leading-relaxed">{f.message}</div>
                     {f.adminReply ? (
@@ -611,7 +682,7 @@ export function ProfileTab({ onOpenMultiExam, onOpenBulkImport }) {
       <ClearDataModal
         isOpen={showClearModal}
         onClose={() => setShowClearModal(false)}
-        onConfirm={clearCurrentUserData}
+        onConfirm={handleClearAllDataConfirm}
       />
     </div>
   );

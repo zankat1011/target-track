@@ -222,19 +222,22 @@ export function StudyProvider({ children }) {
 
     const clearedUser = nextDb.users[session.mobile];
     if (clearedUser) {
+      clearedUser.exam = "General Prep";
+      clearedUser.examDate = "";
       clearedUser.subjects = [];
       clearedUser.logs = [];
       clearedUser.revisions = [];
       clearedUser.tests = [];
       clearedUser.quickNotes = [];
       clearedUser.dailyHabitsLog = {};
+      clearedUser.customHabits = [];
       clearedUser.focusMinutes = 0;
       clearedUser.focusSessions = 0;
       clearedUser.exams = [
         {
           id: "ex_main",
-          name: clearedUser.exam || "GPSC / CCE",
-          examDate: clearedUser.examDate || "",
+          name: "General Prep",
+          examDate: "",
           subjects: []
         }
       ];
@@ -253,7 +256,7 @@ export function StudyProvider({ children }) {
     if (navigator.onLine) {
       await saveCloudDatabase(nextDb, session, false);
     }
-    triggerCelebration("🗑️ Data Cleared!", "તમારો બધો ડેટા રીસેટ થઈ ગયો છે.");
+    triggerCelebration("🗑️ Complete Reset Done!", "તમારા વિષયો, પરીક્ષા તારીખ અને ટાઈમર બધું જ રીસેટ થઈ ગયું છે.");
   }, [isDemoMode, session, db, triggerCelebration]);
 
   return (

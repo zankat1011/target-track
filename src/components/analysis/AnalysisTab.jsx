@@ -245,16 +245,32 @@ export function AnalysisTab() {
     );
     const retention = Math.round(revCovPct * 0.6 + revRate * 0.4);
 
+    const todayLogs = (currentUser?.logs || []).filter((l) => l.date === today);
+    const todayP = todayLogs.reduce((a, l) => a + Number(l.pages || 0), 0);
+    const dueCount = (currentUser?.revisions || []).filter((r) => !r.done && r.dueDate <= today).length;
+
     const unrevPages = Math.max(0, totalPagesRead - totalPagesRevised);
     let pTitle = "🌱 Steady Starter (શરૂઆતનો તબક્કો)";
     let pAdvice = "રોજ નિયમિત પેજ ઉમેરવાનું ચાલુ રાખો અને જે ચેપ્ટર પૂરું થાય તેને તરત જ Finish માર્ક કરો.";
 
-    if (unrevPages > 25 && revCovPct < 50) {
-      pTitle = "⚡ Fast Reader, Low Revision";
-      pAdvice = `તમે ${totalPagesRead} પેજ વાંચ્યા છે પણ ${unrevPages} પેજનું રિવિઝન બાકી છે! આજે જ જૂનું રિવિઝન પૂરું કરો.`;
+    if (totalPagesRead === 0) {
+      pTitle = "🌱 Fresh Start (શુભારંભ)";
+      pAdvice = "હજુ સુધી કોઈ અભ્યાસ લૉગ નથી થયો. આજે ઓછામાં ઓછા 10 પેજ વાંચીને લક્ષ્ય તરફ પહેલું કદમ ઉઠાવો!";
+    } else if (dueCount >= 4) {
+      pTitle = "🚨 Revision Backlog Alert";
+      pAdvice = `તમારી પાસે ${dueCount} ચેપ્ટરનું રિવિઝન બાકી થઈ ગયું છે. નવું વાંચતા પહેલાં 1 કલાક રિવિઝનને આપો!`;
+    } else if (unrevPages > 25 && revCovPct < 55) {
+      pTitle = "⚡ Danger Zone (Fast Reader, Low Revision)";
+      pAdvice = `તમે ${totalPagesRead} પેજ વાંચ્યા છે પણ રિવિઝન કવરેજ માત્ર ${revCovPct}% છે! વાંચેલું ભૂલી ન જવાય તે માટે આજે જ રિવિઝન કરો.`;
+    } else if (ovTestAvg !== null && ovTestAvg < 55) {
+      pTitle = "🎯 Accuracy First (ચોકસાઈ પર ધ્યાન આપો)";
+      pAdvice = `ટેસ્ટ સરેરાશ ${ovTestAvg}% છે. નકારાત્મક માર્કિંગ ઘટાડવા વિકલ્પો અને ભૂલોનું ઊંડાણપૂર્વક વિશ્લેષણ કરો.`;
+    } else if (todayP === 0) {
+      pTitle = "⏳ Daily Momentum Missing";
+      pAdvice = "આજે હજુ 1 પણ પેજ લૉગ નથી થયું. સ્ટ્રીક તૂટે તે પહેલાં હમણાં જ 25 મિનિટનું Focus સેશન શરૂ કરો!";
     } else if (revCovPct >= 75 && (ovTestAvg || 0) >= 70) {
       pTitle = "🏆 Topper Mindset (સંતુલિત તૈયારી)";
-      pAdvice = "જબરદસ્ત! તમારી વાંચવાની ઝડપ, રિવિઝન અને ટેસ્ટ માર્ક્સ ત્રણેય સંતુલિત છે.";
+      pAdvice = `જબરદસ્ત શિસ્ત! તમારી વાંચવાની ઝડપ, રિવિઝન કવરેજ (${revCovPct}%) અને ટેસ્ટ સ્કોર (${ovTestAvg}%) ટોપર્સ લેવલના છે.`;
     }
 
     // 7-Day Consistency Bars
