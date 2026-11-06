@@ -291,6 +291,7 @@ export function AdminApp() {
   const marketplacePayouts = db.marketplacePayouts || [];
   const marketplaceSubscriptions = db.marketplaceSubscriptions || [];
   const sellerApplications = db.sellerApplications || [];
+  const sellerTickets = db.sellerTickets || [];
 
   const handleApproveBook = (bookId) => {
     const nextBooks = marketplaceBooks.map((b) =>
@@ -539,6 +540,13 @@ export function AdminApp() {
     setAdminDeleteStep(1);
     setAdminDeleteVerifyText("");
     triggerCelebration("🗑️ ઓર્ડર ડિલીટ થયો", "ઓર્ડર રેકોર્ડ કાયમ માટે હટાવી દીધો.");
+  };
+
+  const handleDeleteSellerTicket = (ticketId) => {
+    if (!window.confirm("શું તમે આ સેલર હેલ્પ ટિકિટ કાઢી નાખવા માંગો છો?")) return;
+    const nextTickets = sellerTickets.filter((t) => t.id !== ticketId);
+    commitDb({ ...db, sellerTickets: nextTickets });
+    triggerCelebration("🗑️ ટિકિટ સોલ્વ થઈ", "લિસ્ટમાંથી હટાવી દેવામાં આવી.");
   };
 
   // Filtered Users
@@ -1520,6 +1528,57 @@ export function AdminApp() {
                         })}
                       </div>
                     )}
+
+                    {/* Seller Help Desk Tickets Card */}
+                    <div className="pt-4 border-t space-y-3" style={{ borderColor: "var(--border-col)" }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-extrabold flex items-center gap-1.5">
+                          <span>🎫 સેલર હેલ્પ ડેસ્ક ટિકિટ્સ</span>
+                        </span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500">
+                          {sellerTickets.length} ટિકિટ્સ
+                        </span>
+                      </div>
+
+                      {sellerTickets.length === 0 ? (
+                        <div className="text-xs muted-text text-center py-3">હજુ કોઈ સેલર સપોર્ટ ટિકિટ નથી.</div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {sellerTickets.map((t) => (
+                            <div key={t.id} className="subtle-pill p-3 space-y-1.5 text-xs border-l-4 border-l-indigo-500">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="font-extrabold">{t.sellerName}</span>
+                                  <span className="text-[10px] muted-text ml-1.5 font-mono">({t.sellerMobile})</span>
+                                  <span className="ml-2 text-[9px] font-bold px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-500">
+                                    {t.category}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] muted-text">{t.createdAt}</span>
+                              </div>
+                              <p className="font-semibold text-slate-700 dark:text-slate-300 break-words">{t.message}</p>
+                              <div className="flex items-center justify-between pt-1 border-t text-[11px]" style={{ borderColor: "var(--border-col)" }}>
+                                <a
+                                  href={`https://wa.me/91${t.sellerMobile}?text=${encodeURIComponent(`Hello ${t.sellerName}, regarding your Target Book Bazaar issue: "${t.message}"`)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-emerald-500 font-extrabold hover:underline"
+                                >
+                                  💬 WhatsApp પર જવાબ આપો
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSellerTicket(t.id)}
+                                  className="text-rose-500 hover:text-rose-700 font-bold"
+                                >
+                                  🗑️ સોલ્વ & ડિલીટ
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
