@@ -71,9 +71,25 @@ export function MarketplaceTab({ onBackToSyllabus }) {
   const [sellUpi, setSellUpi] = useState("");
   const [sellBio, setSellBio] = useState("");
 
-  // Seller Support States (Requirement 4)
-  const [supportCategory, setSupportCategory] = useState("💸 પેઆઉટ / વૉલેટ ઉપાડ સંબંધિત પ્રશ્ન");
+  // Seller Support Multi-Select Topics & State
+  const SUPPORT_TOPICS_LIST = [
+    "💸 પેઆઉટ / વૉલેટ ઉપાડ",
+    "📚 પુસ્તક અપ્રુવલ / રિજેક્શન",
+    "✏️ લિસ્ટિંગ એડિટ / પ્રમોશન",
+    "👑 VIP પ્લાન / UTR ક્વેરી",
+    "📁 PDF અપલોડ / ડાઉનલોડ પ્રશ્ન",
+    "❓ અન્ય ટેકનિકલ પ્રશ્ન",
+  ];
+  const [selectedSupportTopics, setSelectedSupportTopics] = useState(["💸 પેઆઉટ / વૉલેટ ઉપાડ"]);
   const [supportMsg, setSupportMsg] = useState("");
+
+  const toggleSupportTopic = (topic) => {
+    setSelectedSupportTopics((prev) =>
+      prev.includes(topic)
+        ? (prev.length > 1 ? prev.filter((t) => t !== topic) : prev)
+        : [...prev, topic]
+    );
+  };
 
   // All Books with fallback
   const books = useMemo(() => {
@@ -125,15 +141,21 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     });
   }, [books, selectedExamFilter, searchQ]);
 
-  // Featured combo bundles
+  // ONLY show books explicitly promoted by Admin (Paid Promotion / Top Push)
   const featuredCombos = useMemo(() => {
-    return books.filter((b) => b.status === "Approved" && b.isBundle);
+    return books.filter((b) => b.status === "Approved" && b.isPromoted === true);
   }, [books]);
 
   // My listings and my purchases
   const myListings = useMemo(() => {
     return books.filter((b) => b.sellerMobile === userMobile);
   }, [books, userMobile]);
+
+  // Tiered VIP Plan Pricing: 1-2 books = ₹500, >2 books = ₹1000
+  const existingVipBooksCount = myListings.filter((b) => b.sellerPlan === "fixed_500").length;
+  const currentUploadBookCount = sellIsBundle ? bundleBooksList.length : 1;
+  const totalVipBooksCount = existingVipBooksCount + currentUploadBookCount;
+  const requiredVipPlanFee = totalVipBooksCount > 2 ? 1000 : 500;
 
   const myOrders = useMemo(() => {
     return orders.filter((o) => o.buyerMobile === userMobile);
@@ -368,10 +390,10 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     const origNum = Math.max(offerNum, Math.round(Number(sellOriginalPrice) || offerNum));
     if (!sellUpi.trim()) return alert("કમાણી મેળવવા માટે UPI ID ફરજિયાત છે.");
 
-    // VIP Plan Per-Book verification (Requirement 5)
+    // VIP Plan Per-Book verification (Requirement 5 - Tiered: 1-2 books = ₹500, >2 books = ₹1000)
     if (sellPlanChoice === "fixed_500" && !sellVipUtr.trim()) {
       return alert(
-        "આ પુસ્તક પર 0% કમિશન પ્લાન સક્રિય કરવા માટે ₹500 ટ્રાન્સફરનો 12 આંકડાનો UTR નંબર દાખલ કરો."
+        `આ પુસ્તક પર 0% કમિશન પ્લાન સક્રિય કરવા માટે ₹${requiredVipPlanFee} ટ્રાન્સફરનો 12 આંકડાનો UTR નંબર દાખલ કરો.`
       );
     }
 
@@ -549,17 +571,22 @@ export function MarketplaceTab({ onBackToSyllabus }) {
     );
   };
 
-  // Submit Seller Support Ticket (Requirement 4)
+  // Submit Seller Support Ticket (Requirement 4 - Multi-select & optional comment)
   const handleSubmitSellerTicket = (e) => {
     e.preventDefault();
-    if (!supportMsg.trim()) return alert("કૃપા કરીને તમારો પ્રશ્ન કે સમસ્યા લખો.");
+    if (selectedSupportTopics.length === 0 && !supportMsg.trim()) {
+      return alert("કૃપા કરીને સમસ્યાનો પ્રકાર પસંદ કરો અથવા વિગત લખો.");
+    }
+
+    const topicSummary = selectedSupportTopics.join(", ");
+    const finalMsg = supportMsg.trim() || `સહાયતા વિષય: ${topicSummary}`;
 
     const newTicket = {
       id: `ticket_${Date.now()}`,
       sellerMobile: userMobile,
       sellerName: currentUser?.name || "Seller",
-      category: supportCategory,
-      message: supportMsg.trim(),
+      category: topicSummary || "સામાન્ય પ્રશ્ન",
+      message: finalMsg,
       status: "Pending",
       createdAt: nowFormattedTimestamp(),
       adminReply: "",
@@ -806,7 +833,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
             </div>
           </div>
 
-          {/* Book Cards Grid */}
+          {/* Clean & Minimal Book Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {liveBooks.map((book) => {
               const isBought = myVerifiedBookIds.has(book.id);
@@ -818,128 +845,89 @@ export function MarketplaceTab({ onBackToSyllabus }) {
               return (
                 <div
                   key={book.id}
-                  className="one-card p-4 space-y-3 flex flex-col justify-between border-2 hover:border-indigo-500/50 transition group shadow-xs relative overflow-hidden"
+                  className="one-card p-3.5 flex flex-col justify-between gap-3 hover:border-indigo-500 transition shadow-sm"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap gap-1">
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-500">
-                          {book.exam}
-                        </span>
-                        {book.isBundle && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-purple-500/15 text-purple-500">
-                            🔥 કોમ્બો પેક
-                          </span>
-                        )}
-                        {discountPct > 0 && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-rose-500/15 text-rose-500">
-                            {discountPct}% OFF
-                          </span>
-                        )}
-                      </div>
+                  <div>
+                    {/* Clean Thumbnail with Price Badge */}
+                    <div
+                      onClick={() => { setPreviewBook(book); setActiveDemoImageIdx(0); }}
+                      className="relative w-full h-36 rounded-2xl overflow-hidden bg-slate-900/10 cursor-pointer mb-2.5"
+                    >
+                      <img
+                        src={book.coverImage}
+                        alt={book.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80";
+                        }}
+                      />
+                      <span className="absolute top-2 left-2 text-[10px] font-black px-2.5 py-0.5 rounded-lg bg-black/75 text-white backdrop-blur-xs">
+                        {book.exam}
+                      </span>
+                      <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-black/75 text-white">
+                        👁️ ડેમો ({book.samplePagesCount || 5} પેજ)
+                      </span>
+                    </div>
 
+                    {/* Title & Price Row */}
+                    <div className="flex items-start justify-between gap-2">
+                      <h3
+                        onClick={() => setPreviewBook(book)}
+                        className="text-xs sm:text-sm font-black leading-snug line-clamp-2 cursor-pointer hover:text-indigo-600"
+                      >
+                        {book.title}
+                      </h3>
                       <div className="text-right shrink-0">
-                        <span className="text-base font-black text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-xl block">
+                        <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
                           ₹{book.price}
                         </span>
                         {discountPct > 0 && (
-                          <span className="text-[10px] muted-text line-through block mt-0.5">
+                          <span className="text-[10px] muted-text line-through block">
                             ₹{book.originalPrice}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Book Front Cover Thumbnail Preview */}
-                    <div
-                      onClick={() => setPreviewBook(book)}
-                      className="relative w-full h-36 rounded-2xl overflow-hidden bg-slate-900/10 dark:bg-white/5 cursor-pointer group-hover:opacity-95 transition"
-                    >
-                      <img
-                        src={book.coverImage}
-                        alt={book.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition transform duration-300"
-                        onError={(e) => {
-                          e.target.src =
-                            "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80";
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-2.5">
-                        <span className="text-[10px] text-white font-black bg-black/60 px-2 py-0.5 rounded-lg backdrop-blur-xs flex items-center gap-1">
-                          <span>👁️ ફ્રી ડેમો પેજીસ</span>
-                          {book.demoImages && book.demoImages.length > 0 && (
-                            <span>({book.demoImages.length} ફોટા)</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    <h3
-                      onClick={() => setPreviewBook(book)}
-                      className="text-xs sm:text-sm font-black leading-snug line-clamp-2 cursor-pointer group-hover:text-indigo-500 transition"
-                    >
-                      {book.title}
-                    </h3>
-
-                    {/* Meta Info */}
-                    <div className="flex items-center gap-2 text-[10px] muted-text font-bold">
-                      <span>🏷️ {book.subject}</span>
-                      <span>•</span>
-                      <span>📄 {book.totalPages} પેજ</span>
-                      <span>•</span>
-                      <span className="text-amber-500 font-extrabold">
-                        ⭐ {book.rating || 5.0} ({book.ratings?.length || 0})
-                      </span>
-                    </div>
-
-                    {/* Seller Link */}
-                    <div
-                      onClick={() => setSellerProfileToView(book)}
-                      className="text-[10px] subtle-pill px-2.5 py-1 text-slate-600 dark:text-slate-300 font-semibold flex items-center justify-between cursor-pointer hover:border-indigo-500 transition"
-                    >
-                      <span className="truncate">👨‍🏫 સેલર: {book.sellerName || book.authorAnon}</span>
-                      <span className="text-indigo-500 font-bold shrink-0 ml-1">પ્રોફાઇલ ➔</span>
+                    {/* Compact Single Meta Line */}
+                    <div className="flex items-center justify-between text-[11px] muted-text mt-1.5 pt-1.5 border-t" style={{ borderColor: "var(--border-col)" }}>
+                      <span className="truncate">{book.subject} • {book.totalPages} પેજ</span>
+                      <button
+                        type="button"
+                        onClick={() => setSellerProfileToView(book)}
+                        className="text-indigo-600 dark:text-indigo-400 font-extrabold hover:underline shrink-0"
+                      >
+                        👤 {book.sellerName || "સેલર"} ➔
+                      </button>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="pt-2 border-t space-y-2" style={{ borderColor: "var(--border-col)" }}>
-                    <div className="grid grid-cols-2 gap-2">
+                  {/* Clean 2 Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setPreviewBook(book); setActiveDemoImageIdx(0); }}
+                      className="subtle-pill py-2 text-xs font-black hover:border-indigo-500 transition"
+                    >
+                      👁️ ડેમો જુઓ
+                    </button>
+                    {isBought ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          setPreviewBook(book);
-                          setActiveDemoImageIdx(0);
-                        }}
-                        className="subtle-pill py-2 text-xs font-black hover:border-indigo-500 transition flex items-center justify-center gap-1"
+                        onClick={() => setActiveSubTab("library")}
+                        className="bg-emerald-600/15 text-emerald-600 border border-emerald-500/40 py-2 rounded-xl text-xs font-black"
                       >
-                        <span>👁️</span>
-                        <span>ડેમો જુઓ</span>
+                        ✓ ખરીદેલ છે
                       </button>
-
-                      {isBought ? (
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubTab("library")}
-                          className="bg-emerald-600/15 text-emerald-500 border border-emerald-500/40 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-1"
-                        >
-                          <span>✓</span>
-                          <span>ખરીદેલ છે</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCheckoutBook(book);
-                            setUtrInput("");
-                          }}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-xs font-black shadow-sm transition flex items-center justify-center gap-1"
-                        >
-                          <span>🔒</span>
-                          <span>ખરીદો ₹{book.price}</span>
-                        </button>
-                      )}
-                    </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setCheckoutBook(book); setUtrInput(""); }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-xs font-black shadow-sm transition"
+                      >
+                        🔒 ખરીદો ₹{book.price}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1482,11 +1470,11 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                         <div className="flex items-center justify-between">
                           <span className="font-extrabold text-xs">👑 આ બુક માટે VIP પ્લાન</span>
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500">
-                            ₹500 / ૩ મહિના
+                            ₹{requiredVipPlanFee} / ૩ મહિના
                           </span>
                         </div>
                         <p className="text-[10px] muted-text mt-1">
-                          ૩ મહિના સુધી <b>0% કમિશન (૧૦૦% કમાણી તમારી)</b>!
+                          ૩ મહિના સુધી <b>0% કમિશન (૧૦૦% કમાણી તમારી)</b>! (૨ બુક સુધી ₹૫૦૦, ૨ થી વધુ માટે ₹૧૦૦૦)
                         </p>
                       </div>
                     </div>
@@ -1495,11 +1483,11 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                     {sellPlanChoice === "fixed_500" && (
                       <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5 mt-2">
                         <div className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
-                          ₹500 ટ્રાન્સફર માટે Admin UPI: <b className="font-mono text-indigo-500 select-all">9876543210@paytm</b>
+                          ₹{requiredVipPlanFee} ટ્રાન્સફર માટે Admin UPI: <b className="font-mono text-indigo-500 select-all">9876543210@paytm</b>
                         </div>
                         <input
                           type="text"
-                          placeholder="₹500 પેમેન્ટનો 12 આંકડાનો UTR દાખલ કરો *"
+                          placeholder={`₹${requiredVipPlanFee} પેમેન્ટનો 12 આંકડાનો UTR દાખલ કરો *`}
                           value={sellVipUtr}
                           onChange={(e) => setSellVipUtr(e.target.value)}
                           className="w-full theme-input p-2 text-xs font-mono font-bold"
@@ -1579,7 +1567,7 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                     type="button"
                     onClick={() =>
                       openAdminWhatsApp(
-                        `Hello Target Track Admin, I am Seller (${currentUser?.name || userMobile}). Need help regarding: ${supportCategory}`
+                        `Hello Target Track Admin, I am Seller (${currentUser?.name || userMobile}). Need help regarding: ${selectedSupportTopics.join(", ")}`
                       )
                     }
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-1.5 rounded-xl text-xs shadow-xs flex items-center gap-1.5"
@@ -1592,40 +1580,37 @@ export function MarketplaceTab({ onBackToSyllabus }) {
                 <form onSubmit={handleSubmitSellerTicket} className="space-y-3 pt-1">
                   <div>
                     <label className="block text-[11px] font-extrabold muted-text mb-1.5">
-                      સમસ્યાનો પ્રકાર પસંદ કરો (Pre-defined Help Options):
+                      સમસ્યાનો પ્રકાર પસંદ કરો (એક કરતાં વધુ પસંદ કરી શકાય છે):
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {[
-                        "💸 પેઆઉટ / વૉલેટ ઉપાડ સંબંધિત પ્રશ્ન",
-                        "📚 પુસ્તક મંજૂરી / લિસ્ટિંગ સ્ટેટસ",
-                        "👑 VIP 0% કમિશન પ્લાન પ્રશ્ન",
-                        "📁 PDF અપલોડ કે ડાઉનલોડ ત્રુટિ",
-                        "✏️ કિંમત કે ટાઇટલ બદલવા વિનંતી",
-                        "❓ અન્ય કોઈ પ્રશ્ન",
-                      ].map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setSupportCategory(cat)}
-                          className={`p-2 rounded-xl text-[10px] sm:text-[11px] font-bold text-left transition ${
-                            supportCategory === cat
-                              ? "bg-indigo-600 text-white shadow-xs"
-                              : "subtle-pill hover:border-indigo-500"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
+                      {SUPPORT_TOPICS_LIST.map((topic) => {
+                        const isSelected = selectedSupportTopics.includes(topic);
+                        return (
+                          <button
+                            key={topic}
+                            type="button"
+                            onClick={() => toggleSupportTopic(topic)}
+                            className={`p-2 rounded-xl text-[10px] sm:text-[11px] font-bold text-left transition flex items-center justify-between ${
+                              isSelected
+                                ? "bg-indigo-600 text-white shadow-xs"
+                                : "subtle-pill hover:border-indigo-500"
+                            }`}
+                          >
+                            <span>{topic}</span>
+                            <span>{isSelected ? "✓" : "+"}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-extrabold muted-text mb-1">
-                      તમારો સંદેશ અથવા વિગતો લખો:
+                      તમારો સંદેશ અથવા વિગતો (વૈકલ્પિક - Optional):
                     </label>
                     <textarea
                       rows={2}
-                      placeholder="સમસ્યાની વિગત અહીં લખો..."
+                      placeholder="કોઈ વધારાની વિગત લખવી હોય તો અહીં લખો (ખાલી પણ રાખી શકો છો)..."
                       value={supportMsg}
                       onChange={(e) => setSupportMsg(e.target.value)}
                       className="w-full theme-input p-2.5 text-xs font-semibold"
@@ -2259,75 +2244,55 @@ export function MarketplaceTab({ onBackToSyllabus }) {
         </div>
       )}
 
-      {/* SELLER PORTFOLIO MODAL */}
-      {sellerProfileToView && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 anim-fade">
-          <div className="w-full max-w-lg one-card p-5 space-y-4 border-2 border-indigo-500 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border-col)" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">👨‍🏫</span>
-                <h3 className="text-sm font-black">સેલર પ્રોફાઇલ & ઉપલબ્ધ પુસ્તકો</h3>
-              </div>
-              <button onClick={() => setSellerProfileToView(null)} className="w-7 h-7 rounded-full subtle-pill flex items-center justify-center text-xs font-black">
-                ✕
-              </button>
-            </div>
-
-            <div className="p-3.5 rounded-2xl subtle-pill flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center text-lg font-black">
-                {(sellerProfileToView.sellerName || "T")[0]}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-sm">{sellerProfileToView.sellerName}</span>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
-                    ✓ Verified Topper
-                  </span>
+      {/* SELLER PROFILE MODAL */}
+      {sellerProfileToView && (() => {
+        const sellerBooks = books.filter((b) => b.sellerMobile === sellerProfileToView.sellerMobile);
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="w-full max-w-sm one-card p-4 space-y-3.5 border-2 border-indigo-500 shadow-2xl anim-fade">
+              <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: "var(--border-col)" }}>
+                <div>
+                  <h3 className="text-sm font-black flex items-center gap-1.5">
+                    <span>👨‍🏫</span>
+                    <span>{sellerProfileToView.sellerName || "Topper Seller"}</span>
+                  </h3>
+                  <div className="text-[10px] muted-text font-bold">{sellerProfileToView.sellerBio || "Target Track Verified Contributor"}</div>
                 </div>
-                <div className="text-[11px] muted-text mt-0.5">
-                  {sellerProfileToView.sellerBio || "Target Track Verified Contributor"}
+                <button onClick={() => setSellerProfileToView(null)} className="w-7 h-7 rounded-full subtle-pill text-xs font-black">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="subtle-pill p-2.5">
+                  <div className="text-[10px] muted-text">કુલ પબ્લિશ બુક્સ</div>
+                  <div className="text-base font-black text-indigo-600">{sellerBooks.length} બુક્સ</div>
+                </div>
+                <div className="subtle-pill p-2.5">
+                  <div className="text-[10px] muted-text">સેલર રેટિંગ</div>
+                  <div className="text-base font-black text-amber-500">⭐ {sellerProfileToView.rating || 5.0}</div>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <div className="text-xs font-extrabold muted-text uppercase">
-                આ સેલરની અન્ય નોટ્સ ({books.filter((b) => b.sellerMobile === sellerProfileToView.sellerMobile).length})
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                <div className="text-[11px] font-black muted-text">આ સેલરની બધી બુક્સ:</div>
+                {sellerBooks.map((sb) => (
+                  <div key={sb.id} className="subtle-pill p-2.5 flex items-center justify-between text-xs">
+                    <span className="font-bold truncate pr-2">{sb.title}</span>
+                    <button
+                      onClick={() => {
+                        setSellerProfileToView(null);
+                        setCheckoutBook(sb);
+                      }}
+                      className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black shrink-0"
+                    >
+                      ખરીદો ₹{sb.price}
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-2">
-                {books
-                  .filter((b) => b.sellerMobile === sellerProfileToView.sellerMobile)
-                  .map((b) => (
-                    <div key={b.id} className="subtle-pill p-3 flex items-center justify-between gap-2 text-xs">
-                      <div>
-                        <div className="font-black">{b.title}</div>
-                        <div className="text-[10px] muted-text font-bold">{b.exam} • {b.subject}</div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-black text-emerald-500 block">₹{b.price}</span>
-                        <button
-                          onClick={() => {
-                            setSellerProfileToView(null);
-                            setPreviewBook(b);
-                          }}
-                          className="text-[10px] font-black text-indigo-500 underline mt-0.5"
-                        >
-                          જુઓ ➔
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            <div className="pt-2 border-t flex justify-end">
-              <button onClick={() => setSellerProfileToView(null)} className="subtle-pill px-4 py-2 text-xs font-bold">
-                બંધ કરો
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* DIGITAL INVOICE MODAL */}
       {selectedInvoice && (

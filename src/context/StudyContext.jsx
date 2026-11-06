@@ -185,6 +185,8 @@ function loadLocalDB() {
         if (!Array.isArray(parsed.marketplaceSubscriptions)) parsed.marketplaceSubscriptions = [];
         if (!Array.isArray(parsed.sellerApplications)) parsed.sellerApplications = [];
         if (!Array.isArray(parsed.sellerTickets)) parsed.sellerTickets = [];
+        if (!parsed.deletedIds || typeof parsed.deletedIds !== "object") parsed.deletedIds = {};
+        if (!parsed.lastUpdatedAt) parsed.lastUpdatedAt = 0;
         return parsed;
       } catch (e) {}
     }
@@ -200,7 +202,9 @@ function loadLocalDB() {
     marketplacePayouts: [],
     marketplaceSubscriptions: [],
     sellerApplications: [],
-    sellerTickets: []
+    sellerTickets: [],
+    deletedIds: {},
+    lastUpdatedAt: 0
   };
 }
 
@@ -227,6 +231,15 @@ const mergeUserSafely = (localUser, cloudUser) => {
   return localUpdated >= cloudUpdated ? localUser : cloudUser;
 };
 
+// Filter out tombstoned items that were deleted permanently
+const filterOutDeletedItems = (list = [], deletedIdsMap = {}) => {
+  if (!Array.isArray(list)) return [];
+  return list.filter((item) => {
+    const id = item?.id || item?.archiveId;
+    return !id || !deletedIdsMap[id];
+  });
+};
+
 export function StudyProvider({ children }) {
   const { session, isDemoMode } = useAuth();
   const [db, setDb] = useState(loadLocalDB);
@@ -246,10 +259,25 @@ export function StudyProvider({ children }) {
     }, 2600);
   }, []);
 
-  // Save DB to LocalStorage and push to Firebase
-  const commitDb = useCallback((newDb) => {
-    setDb(newDb);
-    const str = JSON.stringify(newDb);
+  // Save DB to LocalStorage and push to Firebase with Tombstone deletedIds Registry
+  const commitDb = useCallback((newDb, newlyDeletedId = null) => {
+    const stamped = {
+      ...newDb,
+      lastUpdatedAt: Date.now(),
+      deletedIds: {
+        ...(newDb.deletedIds || db.deletedIds || {}),
+        ...(newlyDeletedId ? { [newlyDeletedId]: Date.now() } : {}),
+      },
+    };
+    stamped.marketplaceOrders = filterOutDeletedItems(stamped.marketplaceOrders, stamped.deletedIds);
+    stamped.marketplaceBooks = filterOutDeletedItems(stamped.marketplaceBooks, stamped.deletedIds);
+    stamped.marketplacePayouts = filterOutDeletedItems(stamped.marketplacePayouts, stamped.deletedIds);
+    stamped.sellerApplications = filterOutDeletedItems(stamped.sellerApplications, stamped.deletedIds);
+    stamped.sellerTickets = filterOutDeletedItems(stamped.sellerTickets, stamped.deletedIds);
+    stamped.feedbacks = filterOutDeletedItems(stamped.feedbacks, stamped.deletedIds);
+
+    setDb(stamped);
+    const str = JSON.stringify(stamped);
     try {
       localStorage.setItem(DB_KEY, str);
       localStorage.setItem(DB_MIRROR_KEY, str);
@@ -257,9 +285,9 @@ export function StudyProvider({ children }) {
       console.error("Local storage error:", e);
     }
     if (!isDemoMode && navigator.onLine) {
-      saveCloudDatabase(newDb, session, isDemoMode);
+      saveCloudDatabase(stamped, session, isDemoMode);
     }
-  }, [session, isDemoMode]);
+  }, [db.deletedIds, session, isDemoMode]);
 
   // Sync from cloud
   const syncWithCloud = useCallback(async (manual = false) => {
@@ -271,7 +299,24 @@ export function StudyProvider({ children }) {
     const cloudData = await fetchCloudDatabase();
     if (cloudData) {
       setDb(prev => {
-        const merged = { ...prev };
+        // If local state was updated more recently than cloud, do not let cloud overwrite!
+        const localTime = Number(prev.lastUpdatedAt || 0);
+        const cloudTime = Number(cloudData.lastUpdatedAt || 0);
+        if (localTime > cloudTime) {
+          return prev;
+        }
+
+        const mergedDeletedIds = {
+          ...(prev.deletedIds || {}),
+          ...(cloudData.deletedIds || {}),
+        };
+
+        const merged = {
+          ...prev,
+          deletedIds: mergedDeletedIds,
+          lastUpdatedAt: Math.max(localTime, cloudTime),
+        };
+
         if (cloudData.users) {
           Object.keys(cloudData.users).forEach((mob) => {
             const cloudUser = normalizeUserObject(cloudData.users[mob]);
@@ -279,39 +324,32 @@ export function StudyProvider({ children }) {
             merged.users[mob] = mergeUserSafely(localUser, cloudUser);
           });
         }
-        if (Array.isArray(cloudData.feedbacks)) merged.feedbacks = cloudData.feedbacks;
+        if (Array.isArray(cloudData.feedbacks)) {
+          merged.feedbacks = filterOutDeletedItems(cloudData.feedbacks, mergedDeletedIds);
+        }
         if (typeof cloudData.broadcast === "string") merged.broadcast = cloudData.broadcast;
         if (Array.isArray(cloudData.deletedData)) merged.deletedData = cloudData.deletedData;
         merged.popupBroadcast = cloudData.popupBroadcast || null;
         if (Array.isArray(cloudData.marketplaceBooks)) {
-          merged.marketplaceBooks = cloudData.marketplaceBooks;
-        } else if (!merged.marketplaceBooks || merged.marketplaceBooks.length === 0) {
-          merged.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
+          merged.marketplaceBooks = filterOutDeletedItems(cloudData.marketplaceBooks, mergedDeletedIds);
+          if (merged.marketplaceBooks.length === 0 && !mergedDeletedIds["book_cce_reasoning_top"]) {
+            merged.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
+          }
         }
         if (Array.isArray(cloudData.marketplaceOrders)) {
-          merged.marketplaceOrders = cloudData.marketplaceOrders;
-        } else if (!merged.marketplaceOrders) {
-          merged.marketplaceOrders = [];
+          merged.marketplaceOrders = filterOutDeletedItems(cloudData.marketplaceOrders, mergedDeletedIds);
         }
         if (Array.isArray(cloudData.marketplacePayouts)) {
-          merged.marketplacePayouts = cloudData.marketplacePayouts;
-        } else if (!merged.marketplacePayouts) {
-          merged.marketplacePayouts = [];
+          merged.marketplacePayouts = filterOutDeletedItems(cloudData.marketplacePayouts, mergedDeletedIds);
         }
         if (Array.isArray(cloudData.marketplaceSubscriptions)) {
           merged.marketplaceSubscriptions = cloudData.marketplaceSubscriptions;
-        } else if (!merged.marketplaceSubscriptions) {
-          merged.marketplaceSubscriptions = [];
         }
         if (Array.isArray(cloudData.sellerApplications)) {
-          merged.sellerApplications = cloudData.sellerApplications;
-        } else if (!merged.sellerApplications) {
-          merged.sellerApplications = [];
+          merged.sellerApplications = filterOutDeletedItems(cloudData.sellerApplications, mergedDeletedIds);
         }
         if (Array.isArray(cloudData.sellerTickets)) {
-          merged.sellerTickets = cloudData.sellerTickets;
-        } else if (!merged.sellerTickets) {
-          merged.sellerTickets = [];
+          merged.sellerTickets = filterOutDeletedItems(cloudData.sellerTickets, mergedDeletedIds);
         }
 
         const str = JSON.stringify(merged);

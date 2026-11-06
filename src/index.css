@@ -7,15 +7,15 @@
   box-sizing: border-box;
 }
 
-/* SAMSUNG ONE UI 9 — MINIMAL CREAM THEME */
+/* SAMSUNG ONE UI 9 — HIGH CONTRAST CREAM THEME (Fixed unreadable gray fonts!) */
 html[data-theme="cream"] {
-  --bg-main: #F4F4F8;
+  --bg-main: #F1F5F9;
   --bg-card: #FFFFFF;
-  --bg-subtle: #ECEDF3;
-  --bg-nav: rgba(255, 255, 255, 0.96);
-  --text-main: #121417;
-  --text-muted: #646D7A;
-  --border-col: #E2E4EC;
+  --bg-subtle: #E2E8F0;
+  --bg-nav: rgba(255, 255, 255, 0.98);
+  --text-main: #0F172A;
+  --text-muted: #334155; /* Dark Slate instead of washed-out gray */
+  --border-col: #CBD5E1;
   --accent: #2B50EC;
 }
 
@@ -49,6 +49,7 @@ body {
 
 .subtle-pill {
   background-color: var(--bg-subtle);
+  color: var(--text-main);
   border: 1px solid var(--border-col);
   border-radius: 18px;
   transition: all 0.2s ease;
@@ -68,6 +69,7 @@ body {
 
 .muted-text {
   color: var(--text-muted);
+  font-weight: 600;
 }
 
 .no-scrollbar::-webkit-scrollbar {

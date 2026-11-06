@@ -1,76 +1,79 @@
 import React, { useState, useEffect } from "react";
 
+const INSTALL_DISMISS_KEY = "TT_PWA_BANNER_DISMISSED_UNTIL";
+
 export function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [dismissed, setDismissed] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(true);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
-    setIsStandalone(standalone);
+
+    if (standalone) return;
+
+    // Check if user dismissed it within the last 7 days
+    const dismissedUntil = Number(localStorage.getItem(INSTALL_DISMISS_KEY) || 0);
+    if (Date.now() < dismissedUntil) return;
+
+    // Also show at most once per browser session
+    if (sessionStorage.getItem("TT_PWA_SHOWN_ONCE")) return;
 
     const handleBeforeInstall = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      if (!standalone) {
-        setDismissed(false);
-      }
+      sessionStorage.setItem("TT_PWA_SHOWN_ONCE", "1");
+      setVisible(true);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
-    };
+    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
   }, []);
 
-  if (isStandalone || dismissed) {
-    return null;
-  }
+  if (!visible || !deferredPrompt) return null;
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice && choice.outcome === "accepted") {
-        setDismissed(true);
-      }
-      setDeferredPrompt(null);
-    } else {
-      alert(
-        "📲 એપ ઇન્સ્ટોલ કરવા માટે બ્રાઉઝરના ઉપરના 3 ટપકાં (⋮) મેનુ પર ક્લિક કરી 'Add to Home screen' અથવા 'Install App' દબાવો."
-      );
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    if (choice?.outcome === "accepted") {
+      localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now() + 365 * 86400000));
     }
+    setVisible(false);
+    setDeferredPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    // Hide for 7 days when user clicks X
+    localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now() + 7 * 86400000));
+    setVisible(false);
   };
 
   return (
     <div
       id="pwaInstallBanner"
-      className="fixed bottom-20 inset-x-3.5 max-w-md mx-auto z-50 one-card p-3.5 border-2 border-indigo-600 shadow-2xl flex items-center justify-between gap-2.5 anim-fade"
+      className="fixed bottom-20 inset-x-3.5 max-w-md mx-auto z-50 one-card p-3 border-2 border-indigo-600 shadow-2xl flex items-center justify-between gap-2.5 anim-fade"
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shrink-0">
+        <div className="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-extrabold text-base shrink-0">
           📲
         </div>
         <div className="min-w-0">
-          <div className="text-xs font-extrabold truncate">Install Target Track App</div>
-          <div className="text-[10px] muted-text truncate">
-            ઓફલાઇન વાપરવા અને હોમ-સ્ક્રીન પર ઉમેરવા ઇન્સ્ટોલ કરો
-          </div>
+          <div className="text-xs font-extrabold truncate">Target Track App ઇન્સ્ટોલ કરો</div>
+          <div className="text-[10px] muted-text truncate">ઝડપી અને ઓફલાઇન ઉપયોગ માટે</div>
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
           onClick={handleInstallClick}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold px-3.5 py-2 rounded-xl shadow-sm transition"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold px-3.5 py-1.5 rounded-xl shadow-sm transition"
         >
           Install
         </button>
         <button
-          onClick={() => setDismissed(true)}
-          className="w-7 h-7 rounded-full subtle-pill text-xs font-bold flex items-center justify-center hover:border-indigo-500"
-          title="Close"
+          onClick={handleDismiss}
+          className="w-7 h-7 rounded-full subtle-pill text-xs font-bold flex items-center justify-center"
+          title="7 દિવસ માટે બંધ કરો"
         >
           ✕
         </button>

@@ -24,10 +24,6 @@ export function AdminApp() {
   const [sellerTicketFilter, setSellerTicketFilter] = useState("Pending"); // 'Pending' | 'In Progress' | 'Resolved'
   const [sellerTicketReplies, setSellerTicketReplies] = useState({});
 
-  // 2-Step Verified Order Delete states (Requirement 6)
-  const [adminOrderToDelete, setAdminOrderToDelete] = useState(null);
-  const [adminDeleteStep, setAdminDeleteStep] = useState(1);
-  const [adminDeleteVerifyText, setAdminDeleteVerifyText] = useState("");
 
   const [userDataView, setUserDataView] = useState("active"); // 'active' | 'deleted'
   const [searchQ, setSearchQ] = useState("");
@@ -531,19 +527,6 @@ export function AdminApp() {
     triggerCelebration("❌ સેલર અરજી અસ્વીકાર", "સ્ટેટસ અપડેટ થઈ ગયું.");
   };
 
-  // 2-Step Verified Order Deletion on Admin side (Requirement 6)
-  const handleAdminConfirmDeleteOrder = () => {
-    if (!adminOrderToDelete) return;
-    if (adminDeleteVerifyText.trim().toUpperCase() !== "DELETE") {
-      return alert("પુષ્ટિ કરવા માટે ખાનામાં બરાબર 'DELETE' લખો.");
-    }
-    const nextOrders = marketplaceOrders.filter((o) => o.id !== adminOrderToDelete.id);
-    commitDb({ ...db, marketplaceOrders: nextOrders });
-    setAdminOrderToDelete(null);
-    setAdminDeleteStep(1);
-    setAdminDeleteVerifyText("");
-    triggerCelebration("🗑️ ઓર્ડર ડિલીટ થયો", "ઓર્ડર રેકોર્ડ કાયમ માટે હટાવી દીધો.");
-  };
 
   const handleDeleteSellerTicket = (ticketId) => {
     if (!window.confirm("શું તમે આ સેલર હેલ્પ ટિકિટ કાઢી નાખવા માંગો છો?")) return;
@@ -578,6 +561,30 @@ export function AdminApp() {
     commitDb({ ...db, sellerTickets: nextTickets });
     setSellerTicketReplies((prev) => ({ ...prev, [ticketId]: "" }));
     triggerCelebration("💬 પ્રત્યુત્તર મોકલાયો", "સેલર સુધી એડમિન જવાબ પહોંચી ગયો.");
+  };
+
+  // 1-TIME VERIFICATION PERMANENT DELETE (Never reloads back!)
+  const handleOneStepDelete = (collectionKey, itemId, label = "આ એન્ટ્રી") => {
+    if (!window.confirm(`⚠️ શું તમે ખરેખર ${label} કાયમ માટે ડિલીટ કરવા માંગો છો?`)) return;
+    const currentList = db[collectionKey] || [];
+    const nextList = currentList.filter((item) => (item.id || item.archiveId) !== itemId);
+    const nextDeletedIds = { ...(db.deletedIds || {}), [itemId]: Date.now() };
+    commitDb({
+      ...db,
+      [collectionKey]: nextList,
+      deletedIds: nextDeletedIds,
+      lastUpdatedAt: Date.now(),
+    }, itemId);
+    triggerCelebration("🗑️ કાયમી ડિલીટ થયું!", `${label} સફળતાપૂર્વક હટાવી દીધું.`);
+  };
+
+  // Toggle Admin Paid Promotion ("ટોપર્સ સ્પેશિયલ / પ્રમોટેડ બુક્સ")
+  const handleTogglePromoteBook = (bookId) => {
+    const nextBooks = (db.marketplaceBooks || []).map((b) =>
+      b.id === bookId ? { ...b, isPromoted: !b.isPromoted } : b
+    );
+    commitDb({ ...db, marketplaceBooks: nextBooks, lastUpdatedAt: Date.now() });
+    triggerCelebration("🚀 પ્રમોશન સ્ટેટસ અપડેટ!", "બુક સ્ટોરના ટોપ પ્રમોટેડ બોક્સમાં અપડેટ થઈ ગયું.");
   };
 
   // Filtered Users
@@ -654,56 +661,72 @@ export function AdminApp() {
         ))}
       </div>
 
-      {/* ================= PAGE 1: DASHBOARD ================= */}
+      {/* ================= PAGE 1: CLEAN & ACTIONABLE ADMIN OVERVIEW ================= */}
       {activePage === "dashboard" && (
-        <div className="space-y-3.5 anim-fade">
+        <div className="space-y-4 anim-fade">
+          {/* Top 4 Main KPI Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="one-card p-3.5">
-              <div className="text-[10px] font-bold muted-text">Total Students</div>
-              <div className="text-xl font-extrabold mt-0.5">{usersArr.length}</div>
-            </div>
-            <div className="one-card p-3.5">
-              <div className="text-[10px] font-bold muted-text">5D Trial / Exp</div>
-              <div className="text-xl font-extrabold text-amber-500 mt-0.5">
-                {usersArr.filter((u) => getValidityRemainingDays(u) <= 5 || u.status !== "approved").length}
+            <div onClick={() => setActivePage("users")} className="one-card p-4 cursor-pointer hover:border-indigo-500 border-l-4 border-l-indigo-600">
+              <div className="text-[11px] font-extrabold muted-text">કુલ વિદ્યાર્થીઓ</div>
+              <div className="text-2xl font-black mt-0.5">{usersArr.length}</div>
+              <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                {usersArr.filter((u) => u.status === "approved" && getValidityRemainingDays(u) > 5).length} પેઈડ એક્ટિવ
               </div>
             </div>
-            <div className="one-card p-3.5">
-              <div className="text-[10px] font-bold muted-text">Paid Active</div>
-              <div className="text-xl font-extrabold text-emerald-500 mt-0.5">
-                {usersArr.filter((u) => u.status === "approved" && getValidityRemainingDays(u) > 5).length}
+
+            <div onClick={() => setActivePage("marketplace")} className="one-card p-4 cursor-pointer hover:border-emerald-500 border-l-4 border-l-emerald-600">
+              <div className="text-[11px] font-extrabold muted-text">બુક બજાર ઓર્ડર્સ</div>
+              <div className="text-2xl font-black text-emerald-600 mt-0.5">{marketplaceOrders.length}</div>
+              <div className="text-[10px] text-amber-600 font-bold mt-0.5">
+                {marketplaceOrders.filter((o) => o.status !== "Verified").length} વેરિફાય બાકી
               </div>
             </div>
-            <div className="one-card p-3.5">
-              <div className="text-[10px] font-bold muted-text">Feedback Inbox</div>
-              <div className="text-xl font-extrabold text-indigo-500 mt-0.5">{feedbacks.length}</div>
+
+            <div onClick={() => setActivePage("financials")} className="one-card p-4 cursor-pointer hover:border-purple-500 border-l-4 border-l-purple-600">
+              <div className="text-[11px] font-extrabold muted-text">બુક બજાર કમિશન</div>
+              <div className="text-2xl font-black text-purple-600 mt-0.5">
+                ₹{marketplaceOrders.filter((o) => o.status === "Verified").reduce((s, o) => s + Number(o.adminFee || 0), 0)}
+              </div>
+              <div className="text-[10px] muted-text font-bold mt-0.5">ચોખ્ખો નફો જુઓ ➔</div>
+            </div>
+
+            <div onClick={() => setActivePage("feedback")} className="one-card p-4 cursor-pointer hover:border-amber-500 border-l-4 border-l-amber-500">
+              <div className="text-[11px] font-extrabold muted-text">સપોર્ટ & રિપોર્ટ્સ</div>
+              <div className="text-2xl font-black text-amber-600 mt-0.5">
+                {feedbacks.filter((f) => (f.status || "Pending") === "Pending").length + sellerTickets.filter((t) => (t.status || "Pending") === "Pending").length}
+              </div>
+              <div className="text-[10px] muted-text font-bold mt-0.5">પેન્ડિંગ પ્રશ્નો</div>
             </div>
           </div>
 
-          {/* Top Students Leaderboard */}
+          {/* Pending Actions Alert Bar */}
           <div className="one-card p-4 space-y-2.5">
-            <h2 className="text-xs font-extrabold">🔥 Top Active Students Leaderboard</h2>
-            <div className="space-y-1.5">
-              {usersArr
-                .map((u) => {
-                  let p = 0;
-                  (u.subjects || []).forEach((s) =>
-                    (s.chapters || []).forEach((c) => { p += Number(c.donePages || 0); })
-                  );
-                  return { name: u.name, mobile: u.mobile, pages: p, tests: (u.tests || []).length };
-                })
-                .sort((a, b) => b.pages - a.pages)
-                .slice(0, 8)
-                .map((r, i) => (
-                  <div key={r.mobile} className="subtle-pill px-3 py-2 flex items-center justify-between text-xs">
-                    <span>
-                      <b>#{i + 1} {r.name}</b> <span className="font-mono muted-text">({r.mobile})</span>
-                    </span>
-                    <span className="font-extrabold text-indigo-500">
-                      {r.pages}p Read • {r.tests} Tests
-                    </span>
-                  </div>
-                ))}
+            <h2 className="text-xs font-black uppercase">⚡ તાત્કાલિક ધ્યાન આપવા જેવી બાબતો (Quick Actions)</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
+              <button onClick={() => { setActivePage("marketplace"); setAdminBazaarTab("orders"); }} className="subtle-pill p-3 text-left flex items-center justify-between">
+                <span>🛒 પેન્ડિંગ ઓર્ડર</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px]">
+                  {marketplaceOrders.filter((o) => o.status !== "Verified").length}
+                </span>
+              </button>
+              <button onClick={() => { setActivePage("marketplace"); setAdminBazaarTab("payouts"); }} className="subtle-pill p-3 text-left flex items-center justify-between">
+                <span>💸 સેલર પેઆઉટ</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px]">
+                  {marketplacePayouts.filter((p) => p.status === "Pending").length}
+                </span>
+              </button>
+              <button onClick={() => { setActivePage("marketplace"); setAdminBazaarTab("sellers"); }} className="subtle-pill p-3 text-left flex items-center justify-between">
+                <span>🤝 નવા સેલર</span>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px]">
+                  {sellerApplications.filter((a) => a.status === "Pending").length}
+                </span>
+              </button>
+              <button onClick={() => { setActivePage("marketplace"); setAdminBazaarTab("books"); }} className="subtle-pill p-3 text-left flex items-center justify-between">
+                <span>📚 નવી બુક્સ</span>
+                <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px]">
+                  {marketplaceBooks.filter((b) => b.status === "Pending").length}
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -1561,12 +1584,9 @@ export function AdminApp() {
                                   )}
 
                                   <button
-                                    onClick={() => {
-                                      setAdminOrderToDelete(ord);
-                                      setAdminDeleteStep(1);
-                                      setAdminDeleteVerifyText("");
-                                    }}
-                                    className="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-500/10 transition"
+                                    type="button"
+                                    onClick={() => handleOneStepDelete("marketplaceOrders", ord.id, `ઓર્ડર #${ord.invoiceNo}`)}
+                                    className="w-7 h-7 rounded-lg bg-rose-500/15 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center text-xs transition"
                                     title="ઓર્ડર રેકોર્ડ ડિલીટ કરો"
                                   >
                                     🗑️
@@ -2076,11 +2096,23 @@ export function AdminApp() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => handleDeleteBook(b.id)}
-                                  className="text-rose-500 hover:text-rose-700 p-1 text-xs"
+                                  type="button"
+                                  onClick={() => handleTogglePromoteBook(b.id)}
+                                  className={`px-3 py-1 rounded-xl text-[10px] font-black transition ${
+                                    b.isPromoted
+                                      ? "bg-purple-600 text-white shadow-sm"
+                                      : "one-card text-purple-600 hover:border-purple-500"
+                                  }`}
+                                >
+                                  {b.isPromoted ? "🔥 પ્રમોટેડ (Top Box ON)" : "🚀 પ્રમોટ કરો (Push to Top)"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOneStepDelete("marketplaceBooks", b.id, b.title)}
+                                  className="w-7 h-7 rounded-lg bg-rose-500/15 text-rose-600 flex items-center justify-center text-xs"
                                   title="Delete Listing"
                                 >
-                                  🗑
+                                  🗑️
                                 </button>
                               </div>
                             </div>
@@ -2233,44 +2265,23 @@ export function AdminApp() {
         </div>
       )}
 
-      {/* ================= PAGE: FINANCIAL AUDIT & HISAB-KITAB (Requirement 10) ================= */}
+      {/* ================= PAGE: CLEAN HISAB-KITAB (ONLY 2 DATE OPTIONS + 1-STEP DELETE) ================= */}
       {activePage === "financials" && (
         <div className="space-y-4 anim-fade">
           {(() => {
             const verifiedOrders = marketplaceOrders.filter((o) => o.status === "Verified");
-            const completedPayouts = marketplacePayouts.filter((p) => p.status === "Completed");
+            const paidPayouts = marketplacePayouts.filter((p) => p.status === "Paid" || p.status === "Completed");
 
-            // Filter logic by date range
+            // Filter by ONLY 2 options: 'today' OR 'custom' (Date Range)
+            const todayStr = new Date().toDateString();
             const filteredOrders = verifiedOrders.filter((ord) => {
-              if (finDateRange === "all") return true;
-              const now = new Date();
-              let ordTime = 0;
-              if (ord.timestamp) ordTime = ord.timestamp;
-              else if (ord.createdAt) {
-                const parsed = Date.parse(ord.createdAt);
-                if (!isNaN(parsed)) ordTime = parsed;
-              }
-              if (!ordTime) return true;
-              const ordDate = new Date(ordTime);
-
+              let ordTime = ord.timestamp || Date.parse(ord.createdAt || "") || 0;
               if (finDateRange === "today") {
-                return ordDate.toDateString() === now.toDateString();
+                if (!ordTime) return (ord.createdAt || "").includes(todayISO());
+                return new Date(ordTime).toDateString() === todayStr;
               }
-              if (finDateRange === "yesterday") {
-                const y = new Date();
-                y.setDate(y.getDate() - 1);
-                return ordDate.toDateString() === y.toDateString();
-              }
-              if (finDateRange === "week") {
-                const diffDays = (now - ordDate) / (1000 * 60 * 60 * 24);
-                return diffDays <= 7 && diffDays >= 0;
-              }
-              if (finDateRange === "month") {
-                const diffDays = (now - ordDate) / (1000 * 60 * 60 * 24);
-                return diffDays <= 30 && diffDays >= 0;
-              }
-              if (finDateRange === "custom") {
-                if (!finFromDate && !finToDate) return true;
+              if (finDateRange === "custom" && (finFromDate || finToDate)) {
+                if (!ordTime) return true;
                 const fromTime = finFromDate ? new Date(finFromDate).setHours(0, 0, 0, 0) : 0;
                 const toTime = finToDate ? new Date(finToDate).setHours(23, 59, 59, 999) : Infinity;
                 return ordTime >= fromTime && ordTime <= toTime;
@@ -2278,561 +2289,219 @@ export function AdminApp() {
               return true;
             });
 
-            const totalTurnover = filteredOrders.reduce((sum, o) => sum + (Number(o.bookPrice) || 0), 0);
-            const totalAdminProfit = filteredOrders.reduce((sum, o) => sum + (Number(o.adminFee) || 0), 0);
-            const totalSellerShare = filteredOrders.reduce((sum, o) => sum + (Number(o.sellerPayout) || 0), 0);
-            const totalDisbursed = completedPayouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-
-            // Total unsettled seller liability = all sellers' current wallet balances
-            const allSellerMobiles = Array.from(new Set(marketplaceOrders.map((o) => o.sellerMobile)));
-            const pendingLiability = allSellerMobiles.reduce((acc, m) => {
-              const u = db.users[m];
-              const bal = Number(u?.sellerWallet?.balance || 0);
-              return acc + (bal > 0 ? bal : 0);
-            }, 0);
-
-            // Group orders day-by-day for detailed audit table
-            const dayGroups = {};
-            filteredOrders.forEach((o) => {
-              const dayKey = o.createdAt ? o.createdAt.split(",")[0] : "અન્ય તારીખ";
-              if (!dayGroups[dayKey]) {
-                dayGroups[dayKey] = {
-                  date: dayKey,
-                  ordersCount: 0,
-                  grossVolume: 0,
-                  adminCut: 0,
-                  sellerCut: 0,
-                  orders: [],
-                };
-              }
-              dayGroups[dayKey].ordersCount += 1;
-              dayGroups[dayKey].grossVolume += Number(o.bookPrice) || 0;
-              dayGroups[dayKey].adminCut += Number(o.adminFee) || 0;
-              dayGroups[dayKey].sellerCut += Number(o.sellerPayout) || 0;
-              dayGroups[dayKey].orders.push(o);
-            });
-            const dayList = Object.values(dayGroups);
-
-            // Student App Plans revenue calculations
+            // Student App Plans Revenue
             const paidStudents = usersArr.filter((u) => {
-              const rem = getValidityRemainingDays(u);
-              return u.status === "approved" && rem > 0;
+              const pName = (u.planName || "").toLowerCase();
+              return pName.includes("99") || pName.includes("149") || pName.includes("999") || getValidityRemainingDays(u) > 5;
             });
+            const getPlanPrice = (u) => {
+              const p = u.planName || "";
+              if (p.includes("999") || getValidityRemainingDays(u) > 2000) return 999;
+              if (p.includes("149")) return 149;
+              if (p.includes("99")) return 99;
+              return 0;
+            };
+            const studentPlanTotal = paidStudents.reduce((s, u) => s + getPlanPrice(u), 0);
 
-            const studentPlanLedger = paidStudents.map((u) => {
-              const rem = getValidityRemainingDays(u);
-              let tier = "6M";
-              let planName = "₹99 (6 મહિના પ્લાન)";
-              let price = 99;
-
-              if (u.planPrice) {
-                price = Number(u.planPrice);
-                planName = u.planName || `₹${price} પ્લાન`;
-                tier = price >= 999 ? "LIFETIME" : price >= 149 ? "1Y" : "6M";
-              } else if (rem > 300) {
-                tier = "LIFETIME";
-                planName = "₹999 (લાઈફટાઈમ VIP પ્લાન)";
-                price = 999;
-              } else if (rem > 180) {
-                tier = "1Y";
-                planName = "₹149 (1 વર્ષ એક્સેસ પ્લાન)";
-                price = 149;
-              }
-
-              return {
-                mobile: u.mobile,
-                name: u.name || "Student",
-                exam: u.exam || "General",
-                tier,
-                planName,
-                price,
-                remDays: rem,
-                status: u.status,
-                joinedAt: u.registeredAt || "તાજેતરમાં",
-              };
-            });
-
-            const plan6MCount = studentPlanLedger.filter((s) => s.tier === "6M").length;
-            const plan1YCount = studentPlanLedger.filter((s) => s.tier === "1Y").length;
-            const planLifeCount = studentPlanLedger.filter((s) => s.tier === "LIFETIME").length;
-
-            const totalPlanRevenue = studentPlanLedger.reduce((sum, s) => sum + s.price, 0);
-            const vipSellerFeesTotal = (db.marketplaceSubscriptions || []).reduce(
-              (sum, s) => sum + (Number(s.amount) || 500),
-              0
-            );
-
-            // Combined Net Platform Profit
-            const combinedNetProfit = totalAdminProfit + totalPlanRevenue + vipSellerFeesTotal;
-            const combinedGrossVolume = totalTurnover + totalPlanRevenue + vipSellerFeesTotal;
+            // Marketplace Revenue
+            const grossBazaarSales = filteredOrders.reduce((s, o) => s + Number(o.bookPrice || 0), 0);
+            const adminBazaarProfit = filteredOrders.reduce((s, o) => s + Number(o.adminFee || 0), 0);
+            const sellerShareTotal = filteredOrders.reduce((s, o) => s + Number(o.sellerPayout || 0), 0);
+            const totalPaidToSellers = paidPayouts.reduce((s, p) => s + Number(p.amount || 0), 0);
 
             return (
               <div className="space-y-4">
-                {/* 3 Department Partition Tabs */}
-                <div className="flex items-center gap-2 p-1.5 rounded-2xl subtle-pill overflow-x-auto">
-                  <button
-                    type="button"
-                    onClick={() => setHisabDepartmentTab("overall")}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                      hisabDepartmentTab === "overall"
-                        ? "bg-emerald-600 text-white shadow-md"
-                        : "subtle-pill hover:border-emerald-500"
-                    }`}
-                  >
-                    <span>📊 સમગ્ર હિસાબ (Overall Profit)</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
-                      ₹{combinedNetProfit}
-                    </span>
-                  </button>
+                {/* Clean Header with ONLY 2 Filter Buttons: Today & Date Range */}
+                <div className="one-card p-4 space-y-3 border-l-4 border-l-emerald-600">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
+                      <h2 className="text-sm font-black">💰 હિસાબ-કિતાબ (સેલર & સ્ટુડન્ટ એકાઉન્ટિંગ)</h2>
+                      <p className="text-[11px] muted-text">દૈનિક વેચાણ, સ્ટુડન્ટ પ્લાન અને સેલર ચૂકવણીનો સરળ હિસાબ</p>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setHisabDepartmentTab("student_plans")}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                      hisabDepartmentTab === "student_plans"
-                        ? "bg-indigo-600 text-white shadow-md"
-                        : "subtle-pill hover:border-indigo-500"
-                    }`}
-                  >
-                    <span>🎓 સ્ટુડન્ટ એપ પ્લાન્સ (₹99 / ₹149 / ₹999)</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
-                      ₹{totalPlanRevenue}
-                    </span>
-                  </button>
+                    {/* ONLY 2 OPTIONS AS REQUESTED */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFinDateRange("today");
+                          setFinFromDate("");
+                          setFinToDate("");
+                        }}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition ${
+                          finDateRange === "today"
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "subtle-pill"
+                        }`}
+                      >
+                        📅 આજનો હિસાબ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFinDateRange("custom")}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition ${
+                          finDateRange === "custom"
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "subtle-pill"
+                        }`}
+                      >
+                        🗓️ તારીખ પસંદ કરો (Date Range)
+                      </button>
+                    </div>
+                  </div>
 
+                  {finDateRange === "custom" && (
+                    <div className="pt-2.5 border-t flex flex-wrap items-center gap-3 text-xs" style={{ borderColor: "var(--border-col)" }}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-extrabold">શરૂઆત તારીખ:</span>
+                        <input
+                          type="date"
+                          value={finFromDate}
+                          onChange={(e) => setFinFromDate(e.target.value)}
+                          className="theme-input px-2.5 py-1.5 text-xs font-bold"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-extrabold">અંતિમ તારીખ:</span>
+                        <input
+                          type="date"
+                          value={finToDate}
+                          onChange={(e) => setFinToDate(e.target.value)}
+                          className="theme-input px-2.5 py-1.5 text-xs font-bold"
+                        />
+                      </div>
+                      {(finFromDate || finToDate) && (
+                        <button
+                          type="button"
+                          onClick={() => { setFinFromDate(""); setFinToDate(""); }}
+                          className="text-xs font-extrabold text-rose-500 underline"
+                        >
+                          બધો હિસાબ બતાવો
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4 Clean Summary Boxes */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="one-card p-3.5 border-l-4 border-l-emerald-500">
+                    <div className="text-[10px] font-extrabold muted-text">કુલ ચોખ્ખો નફો (Admin)</div>
+                    <div className="text-xl font-black text-emerald-600 mt-0.5">₹{studentPlanTotal + adminBazaarProfit}</div>
+                    <div className="text-[9px] muted-text">પ્લાન + બુક કમિશન</div>
+                  </div>
+                  <div className="one-card p-3.5 border-l-4 border-l-indigo-500">
+                    <div className="text-[10px] font-extrabold muted-text">સ્ટુડન્ટ એપ પ્લાન આવક</div>
+                    <div className="text-xl font-black text-indigo-600 mt-0.5">₹{studentPlanTotal}</div>
+                    <div className="text-[9px] muted-text">{paidStudents.length} પેઈડ સ્ટુડન્ટ્સ</div>
+                  </div>
+                  <div className="one-card p-3.5 border-l-4 border-l-purple-500">
+                    <div className="text-[10px] font-extrabold muted-text">બુક વેચાણ (કમિશન 10%)</div>
+                    <div className="text-xl font-black text-purple-600 mt-0.5">₹{grossBazaarSales} (નફો: ₹{adminBazaarProfit})</div>
+                    <div className="text-[9px] muted-text">{filteredOrders.length} વેરિફાઈડ ઓર્ડર</div>
+                  </div>
+                  <div className="one-card p-3.5 border-l-4 border-l-amber-500">
+                    <div className="text-[10px] font-extrabold muted-text">સેલર્સનો 90% હિસ્સો</div>
+                    <div className="text-xl font-black text-amber-600 mt-0.5">₹{sellerShareTotal}</div>
+                    <div className="text-[9px] muted-text">ચૂકવાયેલ: ₹{totalPaidToSellers}</div>
+                  </div>
+                </div>
+
+                {/* Simple 2-Tab Partition: [1] Seller Book Bazaar Entries  [2] Student App Plan Entries */}
+                <div className="grid grid-cols-2 gap-2 subtle-pill p-1">
                   <button
                     type="button"
                     onClick={() => setHisabDepartmentTab("seller_bazaar")}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                      hisabDepartmentTab === "seller_bazaar"
-                        ? "bg-violet-600 text-white shadow-md"
-                        : "subtle-pill hover:border-violet-500"
+                    className={`py-2 rounded-xl text-xs font-black transition ${
+                      hisabDepartmentTab !== "student_plans" ? "bg-indigo-600 text-white shadow-sm" : "muted-text"
                     }`}
                   >
-                    <span>🤝 સેલર્સ & બુક બજાર હિસાબ</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
-                      ₹{totalAdminProfit}
-                    </span>
+                    🤝 સેલર & બુક ઓર્ડર એન્ટ્રી ({filteredOrders.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHisabDepartmentTab("student_plans")}
+                    className={`py-2 rounded-xl text-xs font-black transition ${
+                      hisabDepartmentTab === "student_plans" ? "bg-indigo-600 text-white shadow-sm" : "muted-text"
+                    }`}
+                  >
+                    🎓 સ્ટુડન્ટ એપ પ્લાન એન્ટ્રી ({paidStudents.length})
                   </button>
                 </div>
 
-                {/* VIEW 1: OVERALL COMBINED PROFIT */}
-                {hisabDepartmentTab === "overall" && (
-                  <div className="space-y-4 anim-fade">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-emerald-500">
-                        <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          કુલ પ્લેટફોર્મ ચોખ્ખો નફો
-                        </div>
-                        <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                          ₹{combinedNetProfit}
-                        </div>
-                        <div className="text-[9px] muted-text font-bold">એપ પ્લાન્સ + બુક કમિશન + VIP</div>
-                      </div>
-
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-indigo-500">
-                        <div className="text-[10px] font-bold text-indigo-500">
-                          સ્ટુડન્ટ એપ સબ્સ્ક્રિપ્શન આવક
-                        </div>
-                        <div className="text-2xl font-black text-indigo-500 font-mono">
-                          ₹{totalPlanRevenue}
-                        </div>
-                        <div className="text-[9px] muted-text font-bold">
-                          {paidStudents.length} પેઇડ વિદ્યાર્થીઓ
-                        </div>
-                      </div>
-
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-violet-500">
-                        <div className="text-[10px] font-bold text-violet-500">
-                          બુક બજાર ૧૦% કમિશન નફો
-                        </div>
-                        <div className="text-2xl font-black text-violet-500 font-mono">
-                          ₹{totalAdminProfit}
-                        </div>
-                        <div className="text-[9px] muted-text font-bold">
-                          {filteredOrders.length} પુસ્તક વેચાણ
-                        </div>
-                      </div>
-
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-amber-500">
-                        <div className="text-[10px] font-bold text-amber-500">
-                          VIP સેલર ₹૫૦૦ પ્લાન આવક
-                        </div>
-                        <div className="text-2xl font-black text-amber-500 font-mono">
-                          ₹{vipSellerFeesTotal}
-                        </div>
-                        <div className="text-[9px] muted-text font-bold">
-                          {(db.marketplaceSubscriptions || []).length} સક્રિય સેલર પ્લાન
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Revenue Sources Breakdown Card */}
-                    <div className="one-card p-5 space-y-3">
-                      <h3 className="text-xs font-black uppercase muted-text">
-                        📈 આવક સ્ત્રોત વિશ્લેષણ (Revenue Streams Breakdown)
-                      </h3>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs font-bold">
-                          <span>🎓 વિદ્યાર્થી એપ પ્લાન આવક (₹99 / ₹149 / ₹999)</span>
-                          <span className="font-mono text-indigo-500 font-black">₹{totalPlanRevenue}</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500 rounded-full"
-                            style={{
-                              width: `${combinedNetProfit > 0 ? (totalPlanRevenue / combinedNetProfit) * 100 : 0}%`,
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex justify-between text-xs font-bold pt-2">
-                          <span>📚 બુક બજાર પ્લેટફોર્મ ૧૦% કમિશન</span>
-                          <span className="font-mono text-violet-500 font-black">₹{totalAdminProfit}</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full bg-violet-500 rounded-full"
-                            style={{
-                              width: `${combinedNetProfit > 0 ? (totalAdminProfit / combinedNetProfit) * 100 : 0}%`,
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex justify-between text-xs font-bold pt-2">
-                          <span>⭐ VIP સેલર ₹૫૦૦ ફિક્સ પ્લાન</span>
-                          <span className="font-mono text-amber-500 font-black">₹{vipSellerFeesTotal}</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full bg-amber-500 rounded-full"
-                            style={{
-                              width: `${combinedNetProfit > 0 ? (vipSellerFeesTotal / combinedNetProfit) * 100 : 0}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t flex justify-between items-center text-xs font-black" style={{ borderColor: "var(--border-col)" }}>
-                        <span>કુલ ગ્રોસ ટ્રાન્ઝેક્શન વોલ્યુમ (Gross Volume)</span>
-                        <span className="text-sm font-mono text-emerald-600 dark:text-emerald-400">
-                          ₹{combinedGrossVolume}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* VIEW 2: STUDENT APP PLANS HISAB */}
-                {hisabDepartmentTab === "student_plans" && (
-                  <div className="space-y-4 anim-fade">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-sky-500">
-                        <div className="text-[10px] font-bold text-sky-500">₹99 - 6 મહિના પ્લાન</div>
-                        <div className="text-xl font-black text-sky-500 font-mono">
-                          ₹{plan6MCount * 99}
-                        </div>
-                        <div className="text-[10px] muted-text font-bold">{plan6MCount} વિદ્યાર્થીઓ</div>
-                      </div>
-
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-indigo-500">
-                        <div className="text-[10px] font-bold text-indigo-500">₹149 - 1 વર્ષ પ્લાન</div>
-                        <div className="text-xl font-black text-indigo-500 font-mono">
-                          ₹{plan1YCount * 149}
-                        </div>
-                        <div className="text-[10px] muted-text font-bold">{plan1YCount} વિદ્યાર્થીઓ</div>
-                      </div>
-
-                      <div className="one-card p-4 space-y-1 border-l-4 border-l-amber-500">
-                        <div className="text-[10px] font-bold text-amber-500">₹999 - લાઈફટાઈમ VIP પ્લાન</div>
-                        <div className="text-xl font-black text-amber-500 font-mono">
-                          ₹{planLifeCount * 999}
-                        </div>
-                        <div className="text-[10px] muted-text font-bold">{planLifeCount} વિદ્યાર્થીઓ</div>
-                      </div>
-                    </div>
-
-                    {/* Student Subscription Ledger Table */}
-                    <div className="one-card p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-extrabold flex items-center gap-1.5">
-                          <span>📜 સક્રિય વિદ્યાર્થીઓ અને પ્લાન હિસાબ (Student Subscription Ledger)</span>
-                        </h3>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
-                          {studentPlanLedger.length} વિદ્યાર્થીઓ
-                        </span>
-                      </div>
-
-                      {studentPlanLedger.length === 0 ? (
-                        <div className="text-xs muted-text text-center py-6">
-                          હજુ સુધી કોઈ પેઇડ પ્લાન વિદ્યાર્થી નોંધાયેલ નથી.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead>
-                              <tr className="border-b text-[10px] uppercase font-black muted-text" style={{ borderColor: "var(--border-col)" }}>
-                                <th className="py-2.5 px-3">વિદ્યાર્થી નામ</th>
-                                <th className="py-2.5 px-3">મોબાઈલ</th>
-                                <th className="py-2.5 px-3">લક્ષ્ય પરીક્ષા</th>
-                                <th className="py-2.5 px-3">પ્લાન</th>
-                                <th className="py-2.5 px-3 text-right">રકમ (₹)</th>
-                                <th className="py-2.5 px-3 text-center">બાકી દિવસો</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y" style={{ borderColor: "var(--border-col)" }}>
-                              {studentPlanLedger.map((s, idx) => (
-                                <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
-                                  <td className="py-2.5 px-3 font-extrabold">{s.name}</td>
-                                  <td className="py-2.5 px-3 font-mono muted-text">{s.mobile}</td>
-                                  <td className="py-2.5 px-3 font-semibold">{s.exam}</td>
-                                  <td className="py-2.5 px-3">
-                                    <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-500 text-[10px] font-extrabold">
-                                      {s.planName}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 text-right font-black font-mono">₹{s.price}</td>
-                                  <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-500">
-                                    {s.remDays}d
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr className="border-t-2 font-black text-xs bg-black/5 dark:bg-white/5" style={{ borderColor: "var(--border-col)" }}>
-                                <td colSpan="4" className="py-3 px-3 uppercase">કુલ સ્ટુડન્ટ પ્લાન આવક</td>
-                                <td className="py-3 px-3 text-right font-mono text-indigo-500">₹{totalPlanRevenue}</td>
-                                <td></td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* VIEW 3: SELLER & BOOK BAZAAR HISAB */}
-                {hisabDepartmentTab === "seller_bazaar" && (
-                  <div className="space-y-4 anim-fade">
-                    {/* Header & Date Range Filter Pills */}
-                    <div className="one-card p-4 space-y-3 border-l-4 border-l-emerald-600">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <h2 className="text-sm font-extrabold flex items-center gap-1.5">
-                            <span>💰 સેલર્સ & બુક બજાર હિસાબ (Marketplace Ledger)</span>
-                          </h2>
-                          <p className="text-[11px] muted-text mt-0.5">
-                            દૈનિક પુસ્તક વેચાણ, એડમિન ૧૦% ચોખ્ખો નફો અને સેલર ચૂકવણીનું ચોક્કસ વિશ્લેષણ.
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {[
-                            { id: "today", label: "📅 આજનો હિસાબ" },
-                            { id: "yesterday", label: "⏪ ગઈકાલ" },
-                            { id: "week", label: "📊 છેલ્લા ૭ દિવસ" },
-                            { id: "month", label: "🗓️ આ મહિનો" },
-                            { id: "all", label: "♾️ ઓલ-ટાઇમ" },
-                            { id: "custom", label: "🎯 કસ્ટમ તારીખ" },
-                          ].map((chip) => (
-                            <button
-                              key={chip.id}
-                              type="button"
-                              onClick={() => setFinDateRange(chip.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
-                                finDateRange === chip.id
-                                  ? "bg-emerald-600 text-white shadow-xs"
-                                  : "subtle-pill text-slate-700 dark:text-slate-300"
-                              }`}
-                            >
-                              {chip.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Custom Date Range Selectors */}
-                      {finDateRange === "custom" && (
-                        <div className="pt-2 border-t flex flex-wrap items-center gap-3 text-xs" style={{ borderColor: "var(--border-col)" }}>
-                          <div className="flex items-center gap-1.5">
-                            <span className="muted-text font-bold">શરૂઆત તારીખ:</span>
-                            <input
-                              type="date"
-                              value={finFromDate}
-                              onChange={(e) => setFinFromDate(e.target.value)}
-                              className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="muted-text font-bold">અંતિમ તારીખ:</span>
-                            <input
-                              type="date"
-                              value={finToDate}
-                              onChange={(e) => setFinToDate(e.target.value)}
-                              className="theme-input px-2.5 py-1 text-xs font-semibold rounded-lg"
-                            />
-                          </div>
-                          {(finFromDate || finToDate) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFinFromDate("");
-                                setFinToDate("");
-                              }}
-                              className="text-[11px] font-bold text-rose-500 underline ml-auto cursor-pointer"
-                            >
-                              રીસેટ ફિલ્ટર
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 5 KPI Cards for Financial Audit */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                      <div className="one-card p-3.5 space-y-1">
-                        <div className="text-[10px] font-bold muted-text">કુલ ટર્નઓવર (Gross)</div>
-                        <div className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono">
-                          ₹{totalTurnover}
-                        </div>
-                        <div className="text-[9px] text-indigo-500 font-extrabold">{filteredOrders.length} ઓર્ડર્સ</div>
-                      </div>
-
-                      <div className="one-card p-3.5 space-y-1 border-l-4 border-l-emerald-500">
-                        <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">એડમિન ચોખ્ખો નફો (10%)</div>
-                        <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                          ₹{totalAdminProfit}
-                        </div>
-                        <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold">પ્લેટફોર્મ કમાણી</div>
-                      </div>
-
-                      <div className="one-card p-3.5 space-y-1">
-                        <div className="text-[10px] font-bold muted-text">સેલર્સ હિસ્સો (90%)</div>
-                        <div className="text-xl font-black text-violet-500 font-mono">
-                          ₹{totalSellerShare}
-                        </div>
-                        <div className="text-[9px] muted-text font-bold">વિદ્યાર્થી કમાણી</div>
-                      </div>
-
-                      <div className="one-card p-3.5 space-y-1">
-                        <div className="text-[10px] font-bold muted-text">કુલ ચૂકવાયેલ રકમ</div>
-                        <div className="text-xl font-black text-blue-500 font-mono">
-                          ₹{totalDisbursed}
-                        </div>
-                        <div className="text-[9px] text-blue-500 font-extrabold">પેઆઉટ્સ પૂર્ણ</div>
-                      </div>
-
-                      <div className="one-card p-3.5 space-y-1 col-span-2 sm:col-span-1 border-l-4 border-l-amber-500">
-                        <div className="text-[10px] font-bold text-amber-500">બાકી વૉલેટ જવાબદારી</div>
-                        <div className="text-xl font-black text-amber-500 font-mono">
-                          ₹{pendingLiability}
-                        </div>
-                        <div className="text-[9px] text-amber-500 font-extrabold">સેલર લેણું બાકી</div>
-                      </div>
-                    </div>
-
-                    {/* Day-by-Day Itemized Analysis Table (Requirement 10) */}
-                    <div className="one-card p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-extrabold flex items-center gap-1.5">
-                          <span>📅 તારીખ મુજબ દૈનિક હિસાબ (Day-by-Day Breakdown)</span>
-                        </span>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
-                          {dayList.length} દિવસો રેકોર્ડ
-                        </span>
-                      </div>
-
-                      {dayList.length === 0 ? (
-                        <div className="text-xs muted-text text-center py-6">
-                          પસંદ કરેલ સમયગાળામાં કોઈ વેરિફાઈડ ઓર્ડર્સ મળ્યા નથી.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead>
-                              <tr className="border-b text-[10px] uppercase font-black muted-text" style={{ borderColor: "var(--border-col)" }}>
-                                <th className="py-2.5 px-3">તારીખ</th>
-                                <th className="py-2.5 px-3 text-center">ઓર્ડર્સ સંખ્યા</th>
-                                <th className="py-2.5 px-3 text-right">ગ્રોસ વેચાણ (₹)</th>
-                                <th className="py-2.5 px-3 text-right text-emerald-600 dark:text-emerald-400">એડમિન કમિશન (10%)</th>
-                                <th className="py-2.5 px-3 text-right text-violet-500">સેલર જમા (90%)</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y" style={{ borderColor: "var(--border-col)" }}>
-                              {dayList.map((d, idx) => (
-                                <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5 transition">
-                                  <td className="py-2.5 px-3 font-extrabold">{d.date}</td>
-                                  <td className="py-2.5 px-3 text-center font-bold">
-                                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500 font-mono">
-                                      {d.ordersCount}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 text-right font-black font-mono">₹{d.grossVolume}</td>
-                                  <td className="py-2.5 px-3 text-right font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                                    +₹{d.adminCut}
-                                  </td>
-                                  <td className="py-2.5 px-3 text-right font-black text-violet-500 font-mono">
-                                    ₹{d.sellerCut}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr className="border-t-2 font-black text-xs bg-black/5 dark:bg-white/5" style={{ borderColor: "var(--border-col)" }}>
-                                <td className="py-3 px-3 uppercase">કુલ સરવાળો (Total)</td>
-                                <td className="py-3 px-3 text-center">{filteredOrders.length} ઓર્ડર્સ</td>
-                                <td className="py-3 px-3 text-right font-mono">₹{totalTurnover}</td>
-                                <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400 font-mono">₹{totalAdminProfit}</td>
-                                <td className="py-3 px-3 text-right text-violet-500 font-mono">₹{totalSellerShare}</td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Detailed Itemized Transactions Ledger */}
-                    <div className="one-card p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-extrabold flex items-center gap-1.5">
-                          <span>📜 ઓર્ડરવાર વિસ્તૃત લેજર (Itemized Transactions)</span>
-                        </span>
-                        <span className="text-[10px] font-bold muted-text">{filteredOrders.length} વ્યવહારો</span>
-                      </div>
-
-                      {filteredOrders.length === 0 ? (
-                        <div className="text-xs muted-text text-center py-4">કોઈ લેવડ-દેવડ નથી.</div>
-                      ) : (
-                        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                          {filteredOrders.map((o) => (
-                            <div
-                              key={o.id}
-                              className="subtle-pill p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                            >
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-extrabold">{o.bookTitle}</span>
-                                  <span className="text-[10px] font-mono muted-text">#{o.invoiceNo}</span>
-                                </div>
-                                <div className="text-[10px] muted-text">
-                                  ખરીદનાર: <b>{o.buyerName}</b> ({o.buyerMobile}) • સેલર: <b>{o.sellerMobile}</b> • તારીખ: {o.createdAt}
-                                </div>
-                                <div className="text-[10px] font-mono text-indigo-500">UTR: {o.buyerUtr}</div>
-                              </div>
-
-                              <div className="text-right sm:shrink-0">
-                                <div className="font-black text-sm font-mono">₹{o.bookPrice}</div>
-                                <div className="text-[10px] text-emerald-500 font-extrabold">
-                                  કમિશન: ₹{o.adminFee} | સેલર: ₹{o.sellerPayout}
-                                </div>
+                {/* LIST 1: SELLER BOOK BAZAAR ENTRIES WITH 1-STEP DELETE */}
+                {hisabDepartmentTab !== "student_plans" && (
+                  <div className="one-card p-4 space-y-2.5">
+                    <h3 className="text-xs font-black">📜 સેલર બુક વેચાણ હિસાબ (દરેક એન્ટ્રી ડિલીટ કરી શકાશે)</h3>
+                    {filteredOrders.length === 0 ? (
+                      <div className="text-xs muted-text text-center py-6">આ તારીખમાં કોઈ ઓર્ડર નથી.</div>
+                    ) : (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {filteredOrders.map((o) => (
+                          <div key={o.id} className="subtle-pill p-3 flex items-center justify-between gap-2 text-xs">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-extrabold truncate">{o.bookTitle} <span className="font-mono text-[10px] muted-text">#{o.invoiceNo}</span></div>
+                              <div className="text-[10px] muted-text">
+                                ખરીદનાર: <b>{o.buyerName}</b> ({o.buyerMobile}) • સેલર: <b>{o.sellerMobile}</b> • {o.createdAt}
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              <div className="text-right">
+                                <div className="font-black text-sm">₹{o.bookPrice}</div>
+                                <div className="text-[10px] text-emerald-600 font-extrabold">
+                                  નફો: ₹{o.adminFee} | સેલર: ₹{o.sellerPayout}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleOneStepDelete("marketplaceOrders", o.id, `ઓર્ડર #${o.invoiceNo}`)}
+                                className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center font-bold transition"
+                                title="1-ક્લિકમાં ડિલીટ કરો"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* LIST 2: STUDENT APP PLAN ENTRIES WITH 1-STEP RESET */}
+                {hisabDepartmentTab === "student_plans" && (
+                  <div className="one-card p-4 space-y-2.5">
+                    <h3 className="text-xs font-black">🎓 સ્ટુડન્ટ એપ પ્લાન હિસાબ</h3>
+                    {paidStudents.length === 0 ? (
+                      <div className="text-xs muted-text text-center py-6">કોઈ પેઈડ સ્ટુડન્ટ નથી.</div>
+                    ) : (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {paidStudents.map((u) => (
+                          <div key={u.mobile} className="subtle-pill p-3 flex items-center justify-between gap-2 text-xs">
+                            <div>
+                              <div className="font-extrabold">{u.name} ({u.mobile})</div>
+                              <div className="text-[10px] muted-text">
+                                પ્લાન: <b>{u.planName}</b> • એક્સપાયરી: {u.planExpiryDate}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-black text-sm text-emerald-600">₹{getPlanPrice(u)}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!window.confirm(`⚠️ શું તમે ${u.name} નો પેઈડ પ્લાન હટાવીને ફ્રી ટ્રાયલમાં મૂકવા માંગો છો?`)) return;
+                                  handleAssignPlan(u.mobile, 5, "5-Day Free Trial");
+                                }}
+                                className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center font-bold transition"
+                                title="પ્લાન એન્ટ્રી હટાવો"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3037,81 +2706,6 @@ export function AdminApp() {
         </div>
       )}
 
-      {/* ================= 2-STEP VERIFIED ORDER DELETE MODAL (Requirement 6) ================= */}
-      {adminOrderToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm one-card p-5 space-y-4 border-2 border-rose-500 shadow-2xl anim-fade text-center">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center mx-auto text-2xl">
-              ⚠️
-            </div>
-
-            {adminDeleteStep === 1 ? (
-              <div className="space-y-3">
-                <h3 className="text-sm font-extrabold text-rose-500">ઓર્ડર ડિલીટ કરો (Step 1/2)</h3>
-                <p className="text-xs muted-text leading-relaxed">
-                  શું તમે ખરેખર ઓર્ડર <b>#{adminOrderToDelete.invoiceNo}</b> ("{adminOrderToDelete.bookTitle}") કાયમ માટે કાઢી નાખવા માંગો છો? આનાથી ઓર્ડર રેકોર્ડ હિસ્ટ્રીમાંથી દૂર થશે.
-                </p>
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdminOrderToDelete(null);
-                      setAdminDeleteStep(1);
-                      setAdminDeleteVerifyText("");
-                    }}
-                    className="subtle-pill py-2 text-xs font-bold"
-                  >
-                    રદ કરો (Cancel)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAdminDeleteStep(2)}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2 rounded-xl text-xs"
-                  >
-                    આગળ વધો ➔
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <h3 className="text-sm font-extrabold text-rose-500">અંતિમ પુષ્ટિ (Step 2/2)</h3>
-                <p className="text-xs text-rose-500 font-bold leading-relaxed">
-                  કન્ફર્મ કરવા નીચેના બોક્સમાં <span className="bg-rose-500/15 px-2 py-0.5 rounded font-mono">DELETE</span> ટાઈપ કરો:
-                </p>
-                <input
-                  type="text"
-                  value={adminDeleteVerifyText}
-                  onChange={(e) => setAdminDeleteVerifyText(e.target.value)}
-                  placeholder="DELETE લખો"
-                  className="theme-input w-full px-3 py-2 text-center font-mono font-black text-rose-500 text-sm tracking-widest uppercase"
-                  autoFocus
-                />
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setAdminDeleteStep(1)}
-                    className="subtle-pill py-2 text-xs font-bold"
-                  >
-                    ⬅️ પાછા જાઓ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAdminConfirmDeleteOrder}
-                    disabled={adminDeleteVerifyText.trim().toUpperCase() !== "DELETE"}
-                    className={`py-2 rounded-xl text-xs font-extrabold transition ${
-                      adminDeleteVerifyText.trim().toUpperCase() === "DELETE"
-                        ? "bg-rose-600 text-white shadow-sm"
-                        : "bg-rose-600/30 text-white/50 cursor-not-allowed"
-                    }`}
-                  >
-                    🗑️ કાયમ માટે કાઢી નાખો
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
