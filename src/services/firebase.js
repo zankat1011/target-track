@@ -70,6 +70,20 @@ export async function saveCloudDatabase(db, currentSession, isDemoMode) {
           body: JSON.stringify(db.marketplaceOrders || [])
         }), 3000);
       }
+      if (db.marketplacePayouts) {
+        await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp/marketplacePayouts.json", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(db.marketplacePayouts || [])
+        }), 3000);
+      }
+      if (db.marketplaceSubscriptions) {
+        await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp/marketplaceSubscriptions.json", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(db.marketplaceSubscriptions || [])
+        }), 3000);
+      }
     } else {
       await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp.json", {
         method: "PUT",

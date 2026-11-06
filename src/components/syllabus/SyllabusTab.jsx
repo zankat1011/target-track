@@ -286,45 +286,6 @@ export function SyllabusTab({ onOpenBulkImport, onOpenChapLock, onOpenMarketplac
 
   return (
     <div id="tab-syllabus" className="space-y-3.5 anim-fade">
-      {/* 📚 BOOK & NOTES BAZAAR BANNER (NEW) */}
-      <div
-        onClick={() => onOpenMarketplace?.()}
-        className="one-card p-4 bg-gradient-to-r from-emerald-500/15 via-indigo-500/10 to-teal-500/15 border-2 border-emerald-500/40 hover:border-emerald-500 cursor-pointer shadow-md transition group"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center text-2xl shadow-md shrink-0 group-hover:scale-105 transition transform">
-              📖
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-500 transition">
-                  TARGET BOOK & NOTES BAZAAR
-                </h3>
-                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500 text-white animate-pulse">
-                  NEW
-                </span>
-              </div>
-              <p className="text-[11px] muted-text font-medium mt-0.5 line-clamp-1">
-                ટોપર્સની નોટ્સ ખરીદો અથવા તમારી બુક વેચીને ૯૦% ચોખ્ખી કમાણી કરો ➔
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenMarketplace?.();
-            }}
-            className="flex bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-2 rounded-xl text-xs shadow-sm shrink-0 items-center gap-1 group-hover:translate-x-1 transition"
-          >
-            <span>ખોલો</span>
-            <span>➔</span>
-          </button>
-        </div>
-      </div>
-
       {/* 1. Add Subject Card */}
       <div id="tourTargetSyllabusAdd" className="one-card p-4 space-y-2.5">
         <div className="flex items-center justify-between">

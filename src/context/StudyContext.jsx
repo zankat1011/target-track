@@ -18,17 +18,26 @@ export const DEFAULT_MARKETPLACE_BOOKS = [
     title: "🎯 CCE Group A & B Master Reasoning Topper Handwritten Notes",
     authorAnon: "CCE 2024 Topper #14",
     sellerMobile: "9876543210",
-    sellerName: "Topper Student",
+    sellerName: "વિજય પરમાર (CCE Topper)",
+    sellerBio: "CCE Group A & B Rank 14 • 3 વર્ષનો અનુભવ • 1,200+ વિદ્યાર્થીઓ દ્વારા પસંદ",
     sellerUpi: "cce.topper@upi",
     exam: "CCE (Group A & B)",
     subject: "Reasoning & Mental Ability",
     type: "Handwritten Notes",
+    originalPrice: 99,
     price: 49,
+    isBundle: false,
+    sellerPlan: "commission_10", // 'commission_10' | 'fixed_500'
     adminCommissionPct: 10,
     adminFee: 5,
     sellerPayout: 44,
     totalPages: 140,
     samplePagesCount: 6,
+    coverImage: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80",
+    demoImages: [
+      "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=600&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1517842645767-c639042777db?w=600&auto=format&fit=crop&q=80"
+    ],
     sampleDemoText: "✓ Syllogism 10-Second Short Tricks\n✓ Blood Relations Family Tree Formula\n✓ Seating Arrangement Matrix Methods\n✓ Coding-Decoding Direct Shortcuts\n✓ 50+ Solved CCE Previous Questions with Handwritten Explanations",
     sampleDemoUrl: "https://drive.google.com",
     fullDownloadUrl: "https://drive.google.com",
@@ -36,23 +45,36 @@ export const DEFAULT_MARKETPLACE_BOOKS = [
     createdAt: "01 Nov, 10:00 am",
     salesCount: 24,
     rating: 4.9,
+    ratings: [
+      { id: "r_1", studentMobile: "9900011122", studentName: "કિશન પટેલ", rating: 5, comment: "રીઝનિંગમાં સમય બચાવવા માટે શ્રેષ્ઠ શોર્ટકટ્સ છે!", date: "02 Nov, 08:30 pm", hidden: false },
+      { id: "r_2", studentMobile: "9900011123", studentName: "પ્રિયા શાહ", rating: 5, comment: "Handwriting એકદમ ક્લીન અને વાંચવામાં સરળ છે.", date: "04 Nov, 11:20 am", hidden: false }
+    ]
   },
   {
     id: "book_guj_history_top",
     title: "🏛️ ગુજરાતનો સંપૂર્ણ ઈતિહાસ & વારસો — Short Handwritten Capsule",
     authorAnon: "GPSC Interviewee #31",
     sellerMobile: "9876543211",
-    sellerName: "Topper Student 2",
+    sellerName: "ભાવિક દેસાઈ (GPSC Ranker)",
+    sellerBio: "GPSC Class 1-2 Prelims & Mains Qualified • ગુજરાત ઈતિહાસ એક્સપર્ટ",
     sellerUpi: "gpsc.topper@upi",
     exam: "GPSC Class 1-2",
     subject: "ગુજરાતનો ઈતિહાસ & સંસ્કૃતિ",
     type: "Handwritten Notes",
+    originalPrice: 120,
     price: 59,
+    isBundle: false,
+    sellerPlan: "commission_10",
     adminCommissionPct: 10,
     adminFee: 6,
     sellerPayout: 53,
     totalPages: 185,
     samplePagesCount: 8,
+    coverImage: "https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=600&auto=format&fit=crop&q=80",
+    demoImages: [
+      "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=600&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&auto=format&fit=crop&q=80"
+    ],
     sampleDemoText: "✓ મૈત્રક, સોલંકી અને વાઘેલા કાળ ટાઈમલાઈન ચાર્ટ્સ\n✓ ગુજરાતના મહત્વના શિલાલેખ અને સ્થાપત્ય યાદ રાખવાની ટ્રીક્સ\n✓ આદિવાસી મેળાઓ, લોકનૃત્યો અને હસ્તકળા ક્વિક ટેબલ\n✓ GPSC Class 1-2 માટે અતિ-મહત્વના ૨૫૦+ પોઈન્ટર્સ",
     sampleDemoUrl: "https://drive.google.com",
     fullDownloadUrl: "https://drive.google.com",
@@ -60,23 +82,34 @@ export const DEFAULT_MARKETPLACE_BOOKS = [
     createdAt: "02 Nov, 03:30 pm",
     salesCount: 19,
     rating: 5.0,
+    ratings: [
+      { id: "r_3", studentMobile: "9900011124", studentName: "અંકિત જોષી", rating: 5, comment: "ટાઈમલાઈન ચાર્ટ્સ ખૂબ જ મદદરૂપ બન્યા!", date: "03 Nov, 02:15 pm", hidden: false }
+    ]
   },
   {
     id: "book_const_polity_top",
     title: "⚖️ ભારતનું બંધારણ (Constitution) 2026 Latest Amendment Notes",
     authorAnon: "PSI Ranker #07",
     sellerMobile: "9876543212",
-    sellerName: "Topper Student 3",
+    sellerName: "ધ્રુવિલ રાવલ (PSI Selection)",
+    sellerBio: "Police PSI 2023 Selected • કાયદો અને બંધારણ સ્પેશિયાલિસ્ટ",
     sellerUpi: "psi.ranker@upi",
     exam: "Police PSI / Constable",
     subject: "ભારતનું બંધારણ & રાજવ્યવસ્થા",
     type: "Handwritten Notes",
+    originalPrice: 80,
     price: 39,
+    isBundle: false,
+    sellerPlan: "commission_10",
     adminCommissionPct: 10,
     adminFee: 4,
     sellerPayout: 35,
     totalPages: 120,
     samplePagesCount: 5,
+    coverImage: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80",
+    demoImages: [
+      "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80"
+    ],
     sampleDemoText: "✓ મૂળભૂત અધિકારો (કલમ ૧૨ થી ૩૫) ફાસ્ટ રિવિઝન ટ્રીક\n✓ રાષ્ટ્રપતિ, રાજ્યપાલ અને ન્યાયતંત્ર તુલનાત્મક ચાર્ટ\n✓ ૧૦૬મો બંધારણીય સુધારો અને તાજેતરના સુપ્રીમ ચુકાદાઓ\n✓ PSI & Constable ખાસ ૫૦૦+ વન-લાઇનર્સ",
     sampleDemoUrl: "https://drive.google.com",
     fullDownloadUrl: "https://drive.google.com",
@@ -84,6 +117,51 @@ export const DEFAULT_MARKETPLACE_BOOKS = [
     createdAt: "03 Nov, 11:15 am",
     salesCount: 31,
     rating: 4.8,
+    ratings: [
+      { id: "r_4", studentMobile: "9900011125", studentName: "મહેશ ચૌધરી", rating: 5, comment: "બંધારણની કલમો યાદ રાખવા માટે સુપરબ!", date: "04 Nov, 07:10 pm", hidden: false }
+    ]
+  },
+  {
+    id: "book_combo_all_in_one",
+    title: "🔥 CCE & PSI ટોપર્સ સ્પેશિયલ ૩-ઇન-૧ મહા-કોમ્બો બંડલ (રીઝનિંગ + ઈતિહાસ + બંધારણ)",
+    authorAnon: "Target Track Verified Toppers Duo",
+    sellerMobile: "9876543210",
+    sellerName: "વિજય પરમાર (CCE Topper)",
+    sellerBio: "CCE Group A & B Rank 14 • 3 વર્ષનો અનુભવ • 1,200+ વિદ્યાર્થીઓ દ્વારા પસંદ",
+    sellerUpi: "cce.topper@upi",
+    exam: "CCE / GPSC / PSI (All-in-One)",
+    subject: "સંપૂર્ણ ૩ વિષય કોમ્બો",
+    type: "Mega Bundle Pack",
+    originalPrice: 199,
+    price: 99,
+    isBundle: true,
+    bundleItems: [
+      "🎯 CCE Master Reasoning Notes (140 Pages)",
+      "🏛️ ગુજરાતનો સંપૂર્ણ ઈતિહાસ Capsule (185 Pages)",
+      "⚖️ ભારતનું બંધારણ Latest Amendments (120 Pages)"
+    ],
+    sellerPlan: "fixed_500", // 0% commission VIP Seller
+    adminCommissionPct: 0,
+    adminFee: 0,
+    sellerPayout: 99,
+    totalPages: 445,
+    samplePagesCount: 15,
+    coverImage: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80",
+    demoImages: [
+      "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=600&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80"
+    ],
+    sampleDemoText: "✓ ત્રણેય ટોપર નોટ્સ એક જ પેકમાં ૩૩% થી વધુ ડિસ્કાઉન્ટ સાથે\n✓ ૪૪૫+ પેજીસનું સંપૂર્ણ સંકલન\n✓ લાઈફટાઈમ ડાઉનલોડ મર્યાદા (૨ વખત ડાઉનલોડ સપોર્ટ)\n✓ CCE, GPSC અને પોલીસ તમામ પરીક્ષાઓ માટે રામબાણ",
+    sampleDemoUrl: "https://drive.google.com",
+    fullDownloadUrl: "https://drive.google.com",
+    status: "Approved",
+    createdAt: "04 Nov, 09:00 am",
+    salesCount: 42,
+    rating: 5.0,
+    ratings: [
+      { id: "r_5", studentMobile: "9900011126", studentName: "કલ્પેશ વાઘેલા", rating: 5, comment: "ત્રણેય વિષય એક જ પેકમાં મળી ગયા, પૈસા વસૂલ છે!", date: "05 Nov, 04:40 pm", hidden: false }
+    ]
   }
 ];
 
@@ -103,6 +181,8 @@ function loadLocalDB() {
           parsed.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
         }
         if (!Array.isArray(parsed.marketplaceOrders)) parsed.marketplaceOrders = [];
+        if (!Array.isArray(parsed.marketplacePayouts)) parsed.marketplacePayouts = [];
+        if (!Array.isArray(parsed.marketplaceSubscriptions)) parsed.marketplaceSubscriptions = [];
         return parsed;
       } catch (e) {}
     }
@@ -114,7 +194,9 @@ function loadLocalDB() {
     broadcast: "",
     popupBroadcast: null,
     marketplaceBooks: DEFAULT_MARKETPLACE_BOOKS,
-    marketplaceOrders: []
+    marketplaceOrders: [],
+    marketplacePayouts: [],
+    marketplaceSubscriptions: []
   };
 }
 
@@ -181,6 +263,16 @@ export function StudyProvider({ children }) {
           merged.marketplaceOrders = cloudData.marketplaceOrders;
         } else if (!merged.marketplaceOrders) {
           merged.marketplaceOrders = [];
+        }
+        if (Array.isArray(cloudData.marketplacePayouts)) {
+          merged.marketplacePayouts = cloudData.marketplacePayouts;
+        } else if (!merged.marketplacePayouts) {
+          merged.marketplacePayouts = [];
+        }
+        if (Array.isArray(cloudData.marketplaceSubscriptions)) {
+          merged.marketplaceSubscriptions = cloudData.marketplaceSubscriptions;
+        } else if (!merged.marketplaceSubscriptions) {
+          merged.marketplaceSubscriptions = [];
         }
 
         const str = JSON.stringify(merged);
