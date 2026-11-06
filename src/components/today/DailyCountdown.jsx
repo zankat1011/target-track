@@ -66,16 +66,16 @@ export function DailyCountdown({ onOpenMultiExam }) {
   return (
     <div
       id="dailyCountdownWidget"
-      className="mb-3 rounded-3xl p-3.5 border shadow-sm transition-colors duration-200"
+      className="mb-3 sm:mb-6 rounded-3xl p-3.5 sm:p-5 border shadow-sm transition-colors duration-200"
       style={{
         background: palette.bg,
         borderColor: palette.border,
       }}
     >
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
         <button
           onClick={onOpenMultiExam}
-          className="text-xs font-extrabold px-3 py-1 rounded-full bg-white/85 text-slate-900 shadow-sm flex items-center gap-1.5 truncate hover:bg-white transition"
+          className="text-xs sm:text-sm font-extrabold px-3 py-1 sm:px-4 sm:py-1.5 rounded-full bg-white/85 text-slate-900 shadow-sm flex items-center gap-1.5 truncate hover:bg-white transition"
         >
           <span>🎯</span>
           <span className="truncate">{currentUser?.exam || "General Prep"}</span>
@@ -84,37 +84,37 @@ export function DailyCountdown({ onOpenMultiExam }) {
 
         <div
           onClick={onOpenMultiExam}
-          className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-white/80 text-slate-800 cursor-pointer shrink-0 flex items-center gap-1 hover:bg-white transition"
+          className="text-[10px] sm:text-xs font-extrabold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/80 text-slate-800 cursor-pointer shrink-0 flex items-center gap-1 hover:bg-white transition"
         >
           <span>📅</span>
           <span>{formattedDate}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 text-center">
-        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 px-1.5 shadow-sm border border-white/70">
-          <div className="text-base font-extrabold text-slate-900 leading-tight font-mono tracking-wider">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-3 text-center">
+        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 sm:py-3 px-1.5 shadow-sm border border-white/70">
+          <div className="text-base sm:text-2xl font-extrabold text-slate-900 leading-tight font-mono tracking-wider">
             {timeLeft.days}
           </div>
-          <div className="text-[8px] font-extrabold uppercase tracking-wider text-slate-600">DAYS</div>
+          <div className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-600 mt-0.5">DAYS</div>
         </div>
-        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 px-1.5 shadow-sm border border-white/70">
-          <div className="text-base font-extrabold text-slate-900 leading-tight font-mono tracking-wider">
+        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 sm:py-3 px-1.5 shadow-sm border border-white/70">
+          <div className="text-base sm:text-2xl font-extrabold text-slate-900 leading-tight font-mono tracking-wider">
             {timeLeft.hours}
           </div>
-          <div className="text-[8px] font-extrabold uppercase tracking-wider text-slate-600">HRS</div>
+          <div className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-600 mt-0.5">HRS</div>
         </div>
-        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 px-1.5 shadow-sm border border-white/70">
-          <div className="text-base font-extrabold text-slate-900 leading-tight font-mono tracking-wider">
+        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 sm:py-3 px-1.5 shadow-sm border border-white/70">
+          <div className="text-base sm:text-2xl font-extrabold text-slate-900 leading-tight font-mono tracking-wider">
             {timeLeft.mins}
           </div>
-          <div className="text-[8px] font-extrabold uppercase tracking-wider text-slate-600">MINS</div>
+          <div className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-slate-600 mt-0.5">MINS</div>
         </div>
-        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 px-1.5 shadow-sm border border-white/70">
-          <div className="text-base font-extrabold text-indigo-600 leading-tight font-mono tracking-wider">
+        <div className="bg-white/85 backdrop-blur-sm rounded-2xl py-1.5 sm:py-3 px-1.5 shadow-sm border border-white/70">
+          <div className="text-base sm:text-2xl font-extrabold text-indigo-600 leading-tight font-mono tracking-wider">
             {timeLeft.secs}
           </div>
-          <div className="text-[8px] font-extrabold uppercase tracking-wider text-indigo-600">SECS</div>
+          <div className="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 mt-0.5">SECS</div>
         </div>
       </div>
     </div>

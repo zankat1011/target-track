@@ -56,6 +56,20 @@ export async function saveCloudDatabase(db, currentSession, isDemoMode) {
           body: JSON.stringify(db.deletedData || [])
         }), 3000);
       }
+      if (db.marketplaceBooks) {
+        await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp/marketplaceBooks.json", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(db.marketplaceBooks || [])
+        }), 3000);
+      }
+      if (db.marketplaceOrders) {
+        await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp/marketplaceOrders.json", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(db.marketplaceOrders || [])
+        }), 3000);
+      }
     } else {
       await withTimeout(fetch(FIREBASE_DB_URL + "/targetApp.json", {
         method: "PUT",

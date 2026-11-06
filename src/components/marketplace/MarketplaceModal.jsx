@@ -46,8 +46,8 @@ export function MarketplaceModal({ isOpen, onClose }) {
       const q = searchQ.trim().toLowerCase();
       const matchQ =
         !q ||
-        b.title.toLowerCase().includes(q) ||
-        b.subject.toLowerCase().includes(q) ||
+        (b.title || "").toLowerCase().includes(q) ||
+        (b.subject || "").toLowerCase().includes(q) ||
         (b.exam || "").toLowerCase().includes(q);
       return isApproved && matchExam && matchQ;
     });
@@ -152,7 +152,7 @@ export function MarketplaceModal({ isOpen, onClose }) {
       sellerUpi: checkoutBook.sellerUpi,
       buyerMobile: currentUser?.mobile || session?.mobile || "",
       buyerName: currentUser?.name || "Student Buyer",
-      buyerUtr: utrInput.trim(),
+      buyerUtr: utrInput.trim().replace(/\s+/g, ""),
       status: "Pending Verification", // Admin will verify UTR & payment
       sellerPayoutStatus: "Pending",
       createdAt: nowFormattedTimestamp(),

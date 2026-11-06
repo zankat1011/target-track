@@ -58,55 +58,55 @@ export function KpiCards({ onKpiClick }) {
   }, [currentUser]);
 
   return (
-    <div id="tourTargetKpi" className="grid grid-cols-4 gap-2 mb-3.5">
+    <div id="tourTargetKpi" className="grid grid-cols-4 gap-2 sm:gap-4 mb-3.5 sm:mb-6">
       <button
         onClick={() => onKpiClick("completed")}
-        className="one-card p-2.5 text-left active:scale-95 transition"
+        className="one-card p-2.5 sm:p-4 text-left active:scale-95 hover:border-indigo-500 transition shadow-xs group"
       >
-        <div className="text-[9px] font-bold muted-text truncate">પૂર્ણ ચેપ્ટર</div>
-        <div className="text-sm font-extrabold mt-0.5 truncate">
+        <div className="text-[9px] sm:text-xs font-bold muted-text truncate">પૂર્ણ ચેપ્ટર</div>
+        <div className="text-sm sm:text-xl font-black mt-0.5 truncate group-hover:text-indigo-500 transition">
           {metrics.doneChaps}/{metrics.totalChaps}
         </div>
-        <div className="text-[9px] text-indigo-500 font-bold truncate">
+        <div className="text-[9px] sm:text-xs text-indigo-500 font-extrabold truncate mt-0.5">
           {metrics.readPages}p વાંચ્યા
         </div>
       </button>
 
       <button
         onClick={() => onKpiClick("revision")}
-        className="one-card p-2.5 text-left active:scale-95 transition"
+        className="one-card p-2.5 sm:p-4 text-left active:scale-95 hover:border-amber-500 transition shadow-xs group"
       >
-        <div className="text-[9px] font-bold muted-text truncate">આજનું રિવિઝન</div>
-        <div className="text-sm font-extrabold text-amber-500 mt-0.5 truncate">
+        <div className="text-[9px] sm:text-xs font-bold muted-text truncate">આજનું રિવિઝન</div>
+        <div className="text-sm sm:text-xl font-black text-amber-500 mt-0.5 truncate">
           {metrics.dueRevCount} બાકી
         </div>
-        <div className="text-[9px] text-emerald-500 font-bold truncate">
+        <div className="text-[9px] sm:text-xs text-emerald-500 font-extrabold truncate mt-0.5">
           {metrics.revPages}p Rev
         </div>
       </button>
 
       <button
         onClick={() => onKpiClick("streak")}
-        className="one-card p-2.5 text-left active:scale-95 transition"
+        className="one-card p-2.5 sm:p-4 text-left active:scale-95 hover:border-emerald-500 transition shadow-xs group"
       >
-        <div className="text-[9px] font-bold muted-text truncate">સ્ટ્રીક</div>
-        <div className="text-sm font-extrabold text-emerald-500 mt-0.5 truncate">
+        <div className="text-[9px] sm:text-xs font-bold muted-text truncate">સ્ટ્રીક</div>
+        <div className="text-sm sm:text-xl font-black text-emerald-500 mt-0.5 truncate">
           {metrics.streak} 🔥
         </div>
-        <div className="text-[9px] muted-text truncate">
+        <div className="text-[9px] sm:text-xs muted-text font-bold truncate mt-0.5">
           આજે: {metrics.todayPages}p
         </div>
       </button>
 
       <button
         onClick={() => onKpiClick("tests")}
-        className="one-card p-2.5 text-left active:scale-95 transition"
+        className="one-card p-2.5 sm:p-4 text-left active:scale-95 hover:border-purple-500 transition shadow-xs group"
       >
-        <div className="text-[9px] font-bold muted-text truncate">ટેસ્ટ સરેરાશ</div>
-        <div className="text-sm font-extrabold text-purple-500 mt-0.5 truncate">
+        <div className="text-[9px] sm:text-xs font-bold muted-text truncate">ટેસ્ટ સરેરાશ</div>
+        <div className="text-sm sm:text-xl font-black text-purple-500 mt-0.5 truncate">
           {metrics.testAvg !== null ? `${metrics.testAvg}%` : "--%"}
         </div>
-        <div className="text-[9px] muted-text truncate">
+        <div className="text-[9px] sm:text-xs muted-text font-bold truncate mt-0.5">
           {metrics.testCount} ટેસ્ટ
         </div>
       </button>
