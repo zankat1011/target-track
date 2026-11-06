@@ -165,6 +165,63 @@ export const DEFAULT_MARKETPLACE_BOOKS = [
   }
 ];
 
+// ================= MASTER TOMBSTONE & SYNC LOCK ENGINE =================
+let lastLocalMutationTime = 0;
+let isSavingToCloud = false;
+
+// 1. Deep Filter that strips deleted IDs from ALL top-level AND nested arrays (like book.ratings!)
+export const applyGlobalTombstones = (rawDb) => {
+  if (!rawDb) return rawDb;
+  const tombstones = rawDb.deletedIds || {};
+
+  const filterList = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((item) => {
+      const id = item?.id || item?.archiveId;
+      return !id || !tombstones[id];
+    });
+  };
+
+  // Filter Books AND Nested Reviews (b.ratings) inside each book!
+  const cleanBooks = filterList(rawDb.marketplaceBooks).map((book) => ({
+    ...book,
+    ratings: filterList(book.ratings || []),
+  }));
+
+  // Filter User-level nested arrays (Subjects, Chapters, Logs, Revisions, Tests, QuickNotes)
+  const cleanUsers = {};
+  Object.keys(rawDb.users || {}).forEach((mob) => {
+    const u = rawDb.users[mob];
+    if (!u || tombstones[`user_${mob}`]) return;
+    cleanUsers[mob] = {
+      ...u,
+      subjects: filterList(u.subjects).map((s) => ({
+        ...s,
+        chapters: filterList(s.chapters || []),
+      })),
+      logs: filterList(u.logs),
+      revisions: filterList(u.revisions),
+      tests: filterList(u.tests),
+      quickNotes: filterList(u.quickNotes),
+      directMessages: filterList(u.directMessages),
+    };
+  });
+
+  return {
+    ...rawDb,
+    users: cleanUsers,
+    marketplaceBooks: cleanBooks,
+    marketplaceOrders: filterList(rawDb.marketplaceOrders),
+    marketplacePayouts: filterList(rawDb.marketplacePayouts),
+    marketplaceSubscriptions: filterList(rawDb.marketplaceSubscriptions),
+    sellerApplications: filterList(rawDb.sellerApplications),
+    sellerTickets: filterList(rawDb.sellerTickets),
+    feedbacks: filterList(rawDb.feedbacks),
+    deletedData: filterList(rawDb.deletedData),
+    deletedIds: tombstones,
+  };
+};
+
 function loadLocalDB() {
   const keys = [DB_KEY, DB_MIRROR_KEY, "THE_TARGET_CLEAN_DB_V6", "THE_TARGET_CLEAN_DB_V5"];
   for (const k of keys) {
@@ -177,8 +234,16 @@ function loadLocalDB() {
         if (typeof parsed.broadcast !== "string") parsed.broadcast = "";
         if (!parsed.popupBroadcast) parsed.popupBroadcast = null;
         if (!parsed.users) parsed.users = {};
-        if (!Array.isArray(parsed.marketplaceBooks) || parsed.marketplaceBooks.length === 0) {
+        if (parsed.marketplaceInitialized !== true) {
+          parsed.marketplaceInitialized = Boolean(parsed.marketplaceInitialized);
+        }
+        if (!Array.isArray(parsed.marketplaceBooks)) {
+          parsed.marketplaceBooks = parsed.marketplaceInitialized ? [] : DEFAULT_MARKETPLACE_BOOKS;
+        } else if (parsed.marketplaceBooks.length === 0 && !parsed.marketplaceInitialized) {
           parsed.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
+        }
+        if (!parsed.marketplaceBookFiles || typeof parsed.marketplaceBookFiles !== "object") {
+          parsed.marketplaceBookFiles = {};
         }
         if (!Array.isArray(parsed.marketplaceOrders)) parsed.marketplaceOrders = [];
         if (!Array.isArray(parsed.marketplacePayouts)) parsed.marketplacePayouts = [];
@@ -187,7 +252,7 @@ function loadLocalDB() {
         if (!Array.isArray(parsed.sellerTickets)) parsed.sellerTickets = [];
         if (!parsed.deletedIds || typeof parsed.deletedIds !== "object") parsed.deletedIds = {};
         if (!parsed.lastUpdatedAt) parsed.lastUpdatedAt = 0;
-        return parsed;
+        return applyGlobalTombstones(parsed);
       } catch (e) {}
     }
   }
@@ -198,6 +263,8 @@ function loadLocalDB() {
     broadcast: "",
     popupBroadcast: null,
     marketplaceBooks: DEFAULT_MARKETPLACE_BOOKS,
+    marketplaceBookFiles: {},
+    marketplaceInitialized: false,
     marketplaceOrders: [],
     marketplacePayouts: [],
     marketplaceSubscriptions: [],
@@ -259,110 +326,116 @@ export function StudyProvider({ children }) {
     }, 2600);
   }, []);
 
-  // Save DB to LocalStorage and push to Firebase with Tombstone deletedIds Registry
-  const commitDb = useCallback((newDb, newlyDeletedId = null) => {
-    const stamped = {
-      ...newDb,
-      lastUpdatedAt: Date.now(),
-      deletedIds: {
-        ...(newDb.deletedIds || db.deletedIds || {}),
-        ...(newlyDeletedId ? { [newlyDeletedId]: Date.now() } : {}),
-      },
-    };
-    stamped.marketplaceOrders = filterOutDeletedItems(stamped.marketplaceOrders, stamped.deletedIds);
-    stamped.marketplaceBooks = filterOutDeletedItems(stamped.marketplaceBooks, stamped.deletedIds);
-    stamped.marketplacePayouts = filterOutDeletedItems(stamped.marketplacePayouts, stamped.deletedIds);
-    stamped.sellerApplications = filterOutDeletedItems(stamped.sellerApplications, stamped.deletedIds);
-    stamped.sellerTickets = filterOutDeletedItems(stamped.sellerTickets, stamped.deletedIds);
-    stamped.feedbacks = filterOutDeletedItems(stamped.feedbacks, stamped.deletedIds);
+  // Save DB to LocalStorage and push to Firebase with Master Tombstone & Sync Lock Engine
+  const commitDb = useCallback(async (nextState, newlyDeletedIds = []) => {
+    const now = Date.now();
+    lastLocalMutationTime = now;
+    isSavingToCloud = true;
 
-    setDb(stamped);
-    const str = JSON.stringify(stamped);
+    const idsArray = Array.isArray(newlyDeletedIds)
+      ? newlyDeletedIds
+      : newlyDeletedIds
+      ? [newlyDeletedIds]
+      : [];
+
+    const mergedTombstones = { ...(db.deletedIds || {}), ...(nextState.deletedIds || {}) };
+    idsArray.forEach((delId) => {
+      if (delId) mergedTombstones[delId] = now;
+    });
+
+    const cleanState = applyGlobalTombstones({
+      ...nextState,
+      deletedIds: mergedTombstones,
+      lastUpdatedAt: now,
+      marketplaceInitialized: true, // Prevents DEFAULT_MARKETPLACE_BOOKS from ever re-appearing!
+    });
+
+    setDb(cleanState);
     try {
+      const str = JSON.stringify(cleanState);
       localStorage.setItem(DB_KEY, str);
       localStorage.setItem(DB_MIRROR_KEY, str);
     } catch (e) {
-      console.error("Local storage error:", e);
+      console.warn("Storage quota warning:", e);
     }
-    if (!isDemoMode && navigator.onLine) {
-      saveCloudDatabase(stamped, session, isDemoMode);
+
+    try {
+      if (!isDemoMode && navigator.onLine) {
+        await saveCloudDatabase(cleanState, session, isDemoMode);
+      }
+    } finally {
+      isSavingToCloud = false;
     }
   }, [db.deletedIds, session, isDemoMode]);
 
-  // Sync from cloud
+  // Sync from cloud with Mutation Lock & Universal Tombstones
   const syncWithCloud = useCallback(async (manual = false) => {
     if (!navigator.onLine) {
       setCloudStatus("⚡ Offline Mode");
       return;
     }
+
+    // Block background sync if user just deleted/updated something in the last 12 seconds!
+    if (!manual && (isSavingToCloud || Date.now() - lastLocalMutationTime < 12000)) {
+      return;
+    }
+
     setCloudStatus("🔒 Syncing");
     const cloudData = await fetchCloudDatabase();
-    if (cloudData) {
-      setDb(prev => {
-        // If local state was updated more recently than cloud, do not let cloud overwrite!
-        const localTime = Number(prev.lastUpdatedAt || 0);
-        const cloudTime = Number(cloudData.lastUpdatedAt || 0);
-        if (localTime > cloudTime) {
-          return prev;
-        }
-
-        const mergedDeletedIds = {
-          ...(prev.deletedIds || {}),
-          ...(cloudData.deletedIds || {}),
-        };
-
-        const merged = {
-          ...prev,
-          deletedIds: mergedDeletedIds,
-          lastUpdatedAt: Math.max(localTime, cloudTime),
-        };
-
-        if (cloudData.users) {
-          Object.keys(cloudData.users).forEach((mob) => {
-            const cloudUser = normalizeUserObject(cloudData.users[mob]);
-            const localUser = merged.users[mob];
-            merged.users[mob] = mergeUserSafely(localUser, cloudUser);
-          });
-        }
-        if (Array.isArray(cloudData.feedbacks)) {
-          merged.feedbacks = filterOutDeletedItems(cloudData.feedbacks, mergedDeletedIds);
-        }
-        if (typeof cloudData.broadcast === "string") merged.broadcast = cloudData.broadcast;
-        if (Array.isArray(cloudData.deletedData)) merged.deletedData = cloudData.deletedData;
-        merged.popupBroadcast = cloudData.popupBroadcast || null;
-        if (Array.isArray(cloudData.marketplaceBooks)) {
-          merged.marketplaceBooks = filterOutDeletedItems(cloudData.marketplaceBooks, mergedDeletedIds);
-          if (merged.marketplaceBooks.length === 0 && !mergedDeletedIds["book_cce_reasoning_top"]) {
-            merged.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
-          }
-        }
-        if (Array.isArray(cloudData.marketplaceOrders)) {
-          merged.marketplaceOrders = filterOutDeletedItems(cloudData.marketplaceOrders, mergedDeletedIds);
-        }
-        if (Array.isArray(cloudData.marketplacePayouts)) {
-          merged.marketplacePayouts = filterOutDeletedItems(cloudData.marketplacePayouts, mergedDeletedIds);
-        }
-        if (Array.isArray(cloudData.marketplaceSubscriptions)) {
-          merged.marketplaceSubscriptions = cloudData.marketplaceSubscriptions;
-        }
-        if (Array.isArray(cloudData.sellerApplications)) {
-          merged.sellerApplications = filterOutDeletedItems(cloudData.sellerApplications, mergedDeletedIds);
-        }
-        if (Array.isArray(cloudData.sellerTickets)) {
-          merged.sellerTickets = filterOutDeletedItems(cloudData.sellerTickets, mergedDeletedIds);
-        }
-
-        const str = JSON.stringify(merged);
-        localStorage.setItem(DB_KEY, str);
-        localStorage.setItem(DB_MIRROR_KEY, str);
-        return merged;
-      });
-      setCloudStatus("🔒 Online");
-      if (manual) triggerCelebration("☁️ Cloud Synced!", "તાજો ડેટા લોડ થઈ ગયો છે.");
-    } else {
+    if (!cloudData) {
       setCloudStatus(navigator.onLine ? "🔒 Online" : "⚡ Offline Mode");
+      return;
     }
-  }, [triggerCelebration]);
+
+    // Merge local & cloud tombstones so deleted items on ANY device stay deleted forever
+    const combinedTombstones = {
+      ...(cloudData.deletedIds || {}),
+      ...(db.deletedIds || {}),
+    };
+
+    // If local DB is newer than cloud DB, push local to cloud instead of overwriting local!
+    const localTime = Number(db.lastUpdatedAt || 0);
+    const cloudTime = Number(cloudData.lastUpdatedAt || 0);
+    if (localTime > cloudTime) {
+      if (!isDemoMode && navigator.onLine) {
+        await saveCloudDatabase(applyGlobalTombstones({ ...db, deletedIds: combinedTombstones }), session, isDemoMode);
+      }
+      setCloudStatus("🔒 Online");
+      return;
+    }
+
+    // Safely merge users with local state
+    const cleanUsers = {};
+    if (cloudData.users) {
+      Object.keys(cloudData.users).forEach((mob) => {
+        const cloudUser = normalizeUserObject(cloudData.users[mob]);
+        const localUser = db.users[mob];
+        cleanUsers[mob] = mergeUserSafely(localUser, cloudUser);
+      });
+    }
+
+    const finalCleanDb = applyGlobalTombstones({
+      ...cloudData,
+      users: cleanUsers,
+      marketplaceBookFiles: {
+        ...(cloudData.marketplaceBookFiles || {}),
+        ...(db.marketplaceBookFiles || {})
+      },
+      deletedIds: combinedTombstones,
+      marketplaceInitialized: cloudData.marketplaceInitialized || db.marketplaceInitialized || false,
+    });
+
+    setDb(finalCleanDb);
+    const str = JSON.stringify(finalCleanDb);
+    try {
+      localStorage.setItem(DB_KEY, str);
+      localStorage.setItem(DB_MIRROR_KEY, str);
+    } catch (e) {
+      console.warn("Storage quota warning:", e);
+    }
+    setCloudStatus("🔒 Online");
+    if (manual) triggerCelebration("☁️ Cloud Synced!", "તાજો ડેટા લોડ થઈ ગયો છે.");
+  }, [db, session, isDemoMode, triggerCelebration]);
 
   // Periodic auto sync
   useEffect(() => {

@@ -313,10 +313,23 @@ export function AdminApp() {
     triggerCelebration("❌ Book Rejected", "સ્ટેટસ અપડેટ થઈ ગયું.");
   };
 
+  // 1. Permanent Book Delete (Never comes back!)
   const handleDeleteBook = (bookId) => {
-    if (!window.confirm("શું તમે આ બુક લિસ્ટિંગ સંપૂર્ણ કાઢી નાખવા માંગો છો?")) return;
-    const nextBooks = marketplaceBooks.filter((b) => b.id !== bookId);
-    commitDb({ ...db, marketplaceBooks: nextBooks });
+    if (!window.confirm("⚠️ શું તમે આ બુક લિસ્ટિંગ કાયમ માટે કાઢી નાખવા માંગો છો?")) return;
+    const nextBooks = (db.marketplaceBooks || []).filter((b) => b.id !== bookId);
+    const nextBookFiles = { ...(db.marketplaceBookFiles || {}) };
+    delete nextBookFiles[bookId];
+
+    commitDb(
+      {
+        ...db,
+        marketplaceBooks: nextBooks,
+        marketplaceBookFiles: nextBookFiles,
+        marketplaceInitialized: true,
+      },
+      [bookId] // Registers bookId in deletedIds tombstone!
+    );
+    triggerCelebration("🗑️ બુક કાયમ માટે ડિલીટ થઈ!", "હવે તે ફરી ક્યારેય લોડ નહીં થાય.");
   };
 
   const handleVerifyOrder = (orderId) => {
@@ -466,9 +479,10 @@ export function AdminApp() {
     triggerCelebration("👁️ રિવ્યૂ સ્ટેટસ બદલાયું", "સફળતાપૂર્વક અપડેટ થયું.");
   };
 
+  // 2. Permanent Review / Rating Delete (Registered in Tombstones!)
   const handleDeleteReview = (bookId, reviewId) => {
-    if (!window.confirm("શું તમે આ રેટિંગ/રિવ્યૂ કાયમ માટે કાઢી નાખવા માંગો છો?")) return;
-    const nextBooks = marketplaceBooks.map((b) => {
+    if (!window.confirm("⚠️ શું તમે આ રેટિંગ/રિવ્યૂ કાયમ માટે કાઢી નાખવા માંગો છો?")) return;
+    const nextBooks = (db.marketplaceBooks || []).map((b) => {
       if (b.id === bookId) {
         const nextReviews = (b.ratings || []).filter((r) => r.id !== reviewId);
         const avg =
@@ -482,8 +496,12 @@ export function AdminApp() {
       }
       return b;
     });
-    commitDb({ ...db, marketplaceBooks: nextBooks });
-    triggerCelebration("🗑️ રિવ્યૂ ડિલીટ થયો", "રેટિંગ સફળતાપૂર્વક હટાવી દીધું.");
+
+    commitDb(
+      { ...db, marketplaceBooks: nextBooks },
+      [reviewId] // Registers reviewId in deletedIds tombstone so sync never restores it!
+    );
+    triggerCelebration("🗑️ રિવ્યૂ કાયમી ડિલીટ થયો", "રેટિંગ સફળતાપૂર્વક હટાવી દીધું.");
   };
 
   // Seller Application Approvals (Requirement 2)
@@ -563,18 +581,19 @@ export function AdminApp() {
     triggerCelebration("💬 પ્રત્યુત્તર મોકલાયો", "સેલર સુધી એડમિન જવાબ પહોંચી ગયો.");
   };
 
-  // 1-TIME VERIFICATION PERMANENT DELETE (Never reloads back!)
+  // 3. Universal 1-Step Delete for Orders, Payouts, Sellers, Tickets, Feedbacks
   const handleOneStepDelete = (collectionKey, itemId, label = "આ એન્ટ્રી") => {
     if (!window.confirm(`⚠️ શું તમે ખરેખર ${label} કાયમ માટે ડિલીટ કરવા માંગો છો?`)) return;
     const currentList = db[collectionKey] || [];
     const nextList = currentList.filter((item) => (item.id || item.archiveId) !== itemId);
-    const nextDeletedIds = { ...(db.deletedIds || {}), [itemId]: Date.now() };
-    commitDb({
-      ...db,
-      [collectionKey]: nextList,
-      deletedIds: nextDeletedIds,
-      lastUpdatedAt: Date.now(),
-    }, itemId);
+
+    commitDb(
+      {
+        ...db,
+        [collectionKey]: nextList,
+      },
+      [itemId] // Registers itemId in deletedIds tombstone!
+    );
     triggerCelebration("🗑️ કાયમી ડિલીટ થયું!", `${label} સફળતાપૂર્વક હટાવી દીધું.`);
   };
 
