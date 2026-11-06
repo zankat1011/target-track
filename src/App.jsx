@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, Suspense, lazy } from "react";
 import { useAuth } from "./context/AuthContext";
 import { useStudy } from "./context/StudyContext";
 import { getValidityRemainingDays, openAdminWhatsApp } from "./utils/helpers";
 
-// Layout & Common
+// Layout & Common (Eager Loaded for Instant Render & LCP)
 import { Header } from "./components/layout/Header";
 import { BottomNav } from "./components/layout/BottomNav";
 import { SideDrawer } from "./components/layout/SideDrawer";
@@ -12,35 +12,60 @@ import { DesktopTopBar } from "./components/layout/DesktopTopBar";
 import { ToastAndConfetti } from "./components/common/ToastAndConfetti";
 import { PwaInstallBanner } from "./components/common/PwaInstallBanner";
 
-// Screens
+// Core Primary Screens (Eager loaded)
 import { AuthScreen } from "./components/auth/AuthScreen";
-import { AdminApp } from "./components/admin/AdminApp";
 import { TodayTab } from "./components/today/TodayTab";
 import { SyllabusTab } from "./components/syllabus/SyllabusTab";
-import { AnalysisTab } from "./components/analysis/AnalysisTab";
 import { ProfileTab } from "./components/profile/ProfileTab";
 
 // Top Widgets
 import { DailyCountdown } from "./components/today/DailyCountdown";
 import { KpiCards } from "./components/today/KpiCards";
 
-// Modals
-import { MultiExamModal } from "./components/modals/MultiExamModal";
-import { QuickNotesModal } from "./components/modals/QuickNotesModal";
-import { ExtraRevModal } from "./components/modals/ExtraRevModal";
-import { BulkImportModal } from "./components/modals/BulkImportModal";
-import { WhatsNewModal } from "./components/modals/WhatsNewModal";
-import { AppTourModal } from "./components/modals/AppTourModal";
-import { ChapLockModal } from "./components/modals/ChapLockModal";
-import { PopupBroadcastModal } from "./components/modals/PopupBroadcastModal";
-import { MarketplaceModal } from "./components/marketplace/MarketplaceModal";
-import { MarketplaceTab } from "./components/marketplace/MarketplaceTab";
+// Code-Split Heavy Screens & Modals (Loaded on demand to drop LCP to <1s)
+const AdminApp = lazy(() =>
+  import("./components/admin/AdminApp").then((m) => ({ default: m.AdminApp }))
+);
+const MarketplaceTab = lazy(() =>
+  import("./components/marketplace/MarketplaceTab").then((m) => ({ default: m.MarketplaceTab }))
+);
+const AnalysisTab = lazy(() =>
+  import("./components/analysis/AnalysisTab").then((m) => ({ default: m.AnalysisTab }))
+);
+
+const MultiExamModal = lazy(() =>
+  import("./components/modals/MultiExamModal").then((m) => ({ default: m.MultiExamModal }))
+);
+const QuickNotesModal = lazy(() =>
+  import("./components/modals/QuickNotesModal").then((m) => ({ default: m.QuickNotesModal }))
+);
+const ExtraRevModal = lazy(() =>
+  import("./components/modals/ExtraRevModal").then((m) => ({ default: m.ExtraRevModal }))
+);
+const BulkImportModal = lazy(() =>
+  import("./components/modals/BulkImportModal").then((m) => ({ default: m.BulkImportModal }))
+);
+const WhatsNewModal = lazy(() =>
+  import("./components/modals/WhatsNewModal").then((m) => ({ default: m.WhatsNewModal }))
+);
+const AppTourModal = lazy(() =>
+  import("./components/modals/AppTourModal").then((m) => ({ default: m.AppTourModal }))
+);
+const ChapLockModal = lazy(() =>
+  import("./components/modals/ChapLockModal").then((m) => ({ default: m.ChapLockModal }))
+);
+const PopupBroadcastModal = lazy(() =>
+  import("./components/modals/PopupBroadcastModal").then((m) => ({ default: m.PopupBroadcastModal }))
+);
+const MarketplaceModal = lazy(() =>
+  import("./components/marketplace/MarketplaceModal").then((m) => ({ default: m.MarketplaceModal }))
+);
 
 export function App() {
   const { session, isDemoMode, exitDemo } = useAuth();
   const { currentUser } = useStudy();
 
-  const [activeTab, setActiveTab] = useState("today"); // 'today' | 'syllabus' | 'tests' | 'profile'
+  const [activeTab, setActiveTab] = useState("today"); // 'today' | 'syllabus' | 'tests' | 'profile' | 'marketplace'
 
   // Modal open states
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -64,13 +89,13 @@ export function App() {
     );
   }
 
-  // Admin session -> Show Admin App
+  // Admin session -> Show Admin App (Lazy loaded)
   if (session?.role === "admin") {
     return (
-      <>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-extrabold text-sm muted-text">⚡ Loading Admin...</div>}>
         <AdminApp />
         <ToastAndConfetti />
-      </>
+      </Suspense>
     );
   }
 
@@ -156,7 +181,7 @@ export function App() {
 
         {/* Right Main Desktop Content Area */}
         <main className="flex-1 min-w-0 p-6 xl:p-8 max-w-7xl mx-auto overflow-y-auto">
-          {/* Desktop Top Navigation Bar */}
+          {/* Desktop Top Navigation Bar (Instant Render for Top LCP) */}
           <DesktopTopBar
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -199,10 +224,16 @@ export function App() {
             )}
 
             {activeTab === "marketplace" && (
-              <MarketplaceTab onBackToSyllabus={() => setActiveTab("syllabus")} />
+              <Suspense fallback={<div className="p-8 text-center muted-text font-bold text-xs">🛍️ Loading Book Bazaar...</div>}>
+                <MarketplaceTab onBackToSyllabus={() => setActiveTab("syllabus")} />
+              </Suspense>
             )}
 
-            {activeTab === "tests" && <AnalysisTab />}
+            {activeTab === "tests" && (
+              <Suspense fallback={<div className="p-8 text-center muted-text font-bold text-xs">📊 Loading Analytics...</div>}>
+                <AnalysisTab />
+              </Suspense>
+            )}
 
             {activeTab === "profile" && (
               <ProfileTab
@@ -249,10 +280,16 @@ export function App() {
         )}
 
         {activeTab === "marketplace" && (
-          <MarketplaceTab onBackToSyllabus={() => setActiveTab("syllabus")} />
+          <Suspense fallback={<div className="p-8 text-center muted-text font-bold text-xs">🛍️ Loading Book Bazaar...</div>}>
+            <MarketplaceTab onBackToSyllabus={() => setActiveTab("syllabus")} />
+          </Suspense>
         )}
 
-        {activeTab === "tests" && <AnalysisTab />}
+        {activeTab === "tests" && (
+          <Suspense fallback={<div className="p-8 text-center muted-text font-bold text-xs">📊 Loading Analytics...</div>}>
+            <AnalysisTab />
+          </Suspense>
+        )}
 
         {activeTab === "profile" && (
           <ProfileTab
@@ -266,66 +303,85 @@ export function App() {
       </div>
 
       {/* ============================================================ */}
-      {/* Shared Modals & Overlays (Available on both Mobile & Desktop) */}
+      {/* Shared Modals & Overlays (Lazy Loaded on demand)             */}
       {/* ============================================================ */}
-      <MarketplaceModal
-        isOpen={marketplaceOpen}
-        onClose={() => setMarketplaceOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {marketplaceOpen && (
+          <MarketplaceModal
+            isOpen={marketplaceOpen}
+            onClose={() => setMarketplaceOpen(false)}
+          />
+        )}
 
-      <SideDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onOpenMultiExam={() => setMultiExamOpen(true)}
-        onOpenQuickNotes={() => setQuickNotesOpen(true)}
-        onOpenExtraRev={() => setExtraRevOpen(true)}
-        onOpenBulkImport={() => setBulkImportOpen(true)}
-        onOpenWhatsNew={() => setWhatsNewOpen(true)}
-        onStartTour={() => setTourOpen(true)}
-        onOpenMarketplace={() => {
-          setDrawerOpen(false);
-          setActiveTab("marketplace");
-        }}
-      />
+        <SideDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          onOpenMultiExam={() => setMultiExamOpen(true)}
+          onOpenQuickNotes={() => setQuickNotesOpen(true)}
+          onOpenExtraRev={() => setExtraRevOpen(true)}
+          onOpenBulkImport={() => setBulkImportOpen(true)}
+          onOpenWhatsNew={() => setWhatsNewOpen(true)}
+          onStartTour={() => setTourOpen(true)}
+          onOpenMarketplace={() => {
+            setDrawerOpen(false);
+            setActiveTab("marketplace");
+          }}
+        />
 
-      <MultiExamModal
-        isOpen={multiExamOpen}
-        onClose={() => setMultiExamOpen(false)}
-      />
+        {multiExamOpen && (
+          <MultiExamModal
+            isOpen={multiExamOpen}
+            onClose={() => setMultiExamOpen(false)}
+          />
+        )}
 
-      <QuickNotesModal
-        isOpen={quickNotesOpen}
-        onClose={() => setQuickNotesOpen(false)}
-      />
+        {quickNotesOpen && (
+          <QuickNotesModal
+            isOpen={quickNotesOpen}
+            onClose={() => setQuickNotesOpen(false)}
+          />
+        )}
 
-      <ExtraRevModal
-        isOpen={extraRevOpen}
-        onClose={() => setExtraRevOpen(false)}
-      />
+        {extraRevOpen && (
+          <ExtraRevModal
+            isOpen={extraRevOpen}
+            onClose={() => setExtraRevOpen(false)}
+          />
+        )}
 
-      <BulkImportModal
-        isOpen={bulkImportOpen}
-        onClose={() => setBulkImportOpen(false)}
-      />
+        {bulkImportOpen && (
+          <BulkImportModal
+            isOpen={bulkImportOpen}
+            onClose={() => setBulkImportOpen(false)}
+          />
+        )}
 
-      <WhatsNewModal
-        isOpen={whatsNewOpen}
-        onClose={() => setWhatsNewOpen(false)}
-      />
+        {whatsNewOpen && (
+          <WhatsNewModal
+            isOpen={whatsNewOpen}
+            onClose={() => setWhatsNewOpen(false)}
+          />
+        )}
 
-      <AppTourModal
-        isOpen={tourOpen}
-        onClose={() => setTourOpen(false)}
-        onNavigateTab={(tab) => setActiveTab(tab)}
-      />
+        {tourOpen && (
+          <AppTourModal
+            isOpen={tourOpen}
+            onClose={() => setTourOpen(false)}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+          />
+        )}
 
-      <ChapLockModal
-        chapter={lockedChapToReopen}
-        isOpen={!!lockedChapToReopen}
-        onClose={() => setLockedChapToReopen(null)}
-      />
+        {lockedChapToReopen && (
+          <ChapLockModal
+            chapter={lockedChapToReopen}
+            isOpen={!!lockedChapToReopen}
+            onClose={() => setLockedChapToReopen(null)}
+          />
+        )}
 
-      <PopupBroadcastModal />
+        <PopupBroadcastModal />
+      </Suspense>
+
       <PwaInstallBanner />
       <ToastAndConfetti />
     </div>

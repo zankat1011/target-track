@@ -28,7 +28,12 @@ export function DesktopTopBar({ activeTab, onTabChange, onOpenQuickNotes, onOpen
       {/* Page Title & Gujarati Motivation */}
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-black tracking-tight">{curr.title}</h2>
+          <h2
+            className="text-xl font-black tracking-tight text-slate-900 dark:text-white"
+            style={{ contain: "layout style paint" }}
+          >
+            {curr.title}
+          </h2>
           <span className="text-[11px] font-bold muted-text">• {todayFormatted}</span>
         </div>
         <p className="text-xs muted-text font-medium mt-0.5">{curr.subtitle}</p>

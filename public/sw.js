@@ -1,15 +1,14 @@
-const CACHE_NAME = "target-track-offline-v10";
-const ASSETS = [
+const CACHE_NAME = "target-track-offline-v11";
+const STATIC_ASSETS = [
   "./",
   "./index.html",
-  "./manifest.json",
-  "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Sans+Gujarati:wght@500;600;700;800&display=swap"
+  "./manifest.json"
 ];
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS).catch(() => {}))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
 });
 
@@ -25,24 +24,63 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
+  const url = e.request.url;
+
+  // Ignore non-GET requests or Firebase realtime database calls
   if (
     e.request.method !== "GET" ||
-    e.request.url.includes("firebaseio.com") ||
-    e.request.url.includes("googleapis.com/identitytoolkit")
+    url.includes("firebaseio.com") ||
+    url.includes("googleapis.com/identitytoolkit")
   ) {
     return;
   }
+
+  // 1. Static Assets (Scripts, CSS, Fonts, Images) -> Cache-First / Stale-While-Revalidate
+  const isStatic =
+    e.request.destination === "script" ||
+    e.request.destination === "style" ||
+    e.request.destination === "font" ||
+    e.request.destination === "image" ||
+    url.includes("/assets/") ||
+    url.includes("fonts.gstatic.com") ||
+    url.includes("fonts.googleapis.com") ||
+    url.endsWith(".js") ||
+    url.endsWith(".css") ||
+    url.endsWith(".png") ||
+    url.endsWith(".svg") ||
+    url.endsWith(".webp") ||
+    url.endsWith(".woff2");
+
+  if (isStatic) {
+    e.respondWith(
+      caches.match(e.request).then((cached) => {
+        const fetchPromise = fetch(e.request)
+          .then((networkRes) => {
+            if (networkRes && networkRes.status === 200) {
+              const resClone = networkRes.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
+            }
+            return networkRes;
+          })
+          .catch(() => cached);
+
+        // Return cached instantly (0ms) if available, otherwise fetch from network
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // 2. Navigation / HTML -> Network First with immediate Cache Fallback
   e.respondWith(
     fetch(e.request)
-      .then((res) => {
-        const clone = res.clone();
-        caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
-        return res;
+      .then((networkRes) => {
+        if (networkRes && networkRes.status === 200) {
+          const resClone = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
+        }
+        return networkRes;
       })
-      .catch(() =>
-        caches
-          .match(e.request)
-          .then((cached) => cached || caches.match("./index.html"))
-      )
+      .catch(() => caches.match(e.request).then((cached) => cached || caches.match("./index.html")))
   );
 });
