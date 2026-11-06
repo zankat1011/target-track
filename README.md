@@ -8,7 +8,7 @@ Now fully converted and refactored from a single-file application into a modular
 
 ## ✨ Features
 
-- **📱 Samsung One UI 9 Minimal Design:** Minimal Cream and AMOLED Deep Black theme support with fluid animations.
+- **📱 One UI 9 Minimal Design:** Minimal Cream and AMOLED Deep Black theme support with fluid animations.
 - **⏳ Daily Pastel Countdown:** Dynamic daily-changing light gradient countdown timer showing Days, Hours, Minutes, and Seconds to your target exam.
 - **🎯 Multiple Exam Management & Smart Sync:** Switch between different exams seamlessly while automatically synchronizing common subject and chapter progress.
 - **📖 Daily Study Logger:** Log read pages with sub-topics, steppers, and single-click chapter finish.

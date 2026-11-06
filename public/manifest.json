@@ -4,7 +4,7 @@
   "description": "Smart Study OS for Competitive Exams",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#F8FAFC",
+  "background_color": "#FAF7F2",
   "theme_color": "#2B50EC",
   "icons": [
     {
@@ -12,6 +12,11 @@
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn.corenexis.com/f/7uojdNqTvNd.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
