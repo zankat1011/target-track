@@ -12,7 +12,8 @@ export function SideDrawer({
   onOpenExtraRev,
   onOpenBulkImport,
   onOpenWhatsNew,
-  onStartTour
+  onStartTour,
+  onOpenMarketplace,
 }) {
   const { session, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -57,6 +58,15 @@ export function SideDrawer({
           </div>
 
           <div className="space-y-1.5 text-xs font-bold">
+            <button
+              onClick={() => { onClose(); onOpenMarketplace?.(); }}
+              className="w-full subtle-pill p-3 text-left flex items-center justify-between bg-gradient-to-r from-emerald-500/15 to-indigo-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+            >
+              <div className="flex items-center gap-2.5">
+                <span>📖</span> <span>Book & Notes Bazaar</span>
+              </div>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">NEW</span>
+            </button>
             <button
               onClick={() => { onClose(); onOpenMultiExam(); }}
               className="w-full subtle-pill p-3 text-left flex items-center gap-2.5 hover:border-indigo-500"

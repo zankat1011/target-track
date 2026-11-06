@@ -7,6 +7,8 @@ import { getValidityRemainingDays, openAdminWhatsApp } from "./utils/helpers";
 import { Header } from "./components/layout/Header";
 import { BottomNav } from "./components/layout/BottomNav";
 import { SideDrawer } from "./components/layout/SideDrawer";
+import { DesktopSidebar } from "./components/layout/DesktopSidebar";
+import { DesktopTopBar } from "./components/layout/DesktopTopBar";
 import { ToastAndConfetti } from "./components/common/ToastAndConfetti";
 import { PwaInstallBanner } from "./components/common/PwaInstallBanner";
 
@@ -31,6 +33,7 @@ import { WhatsNewModal } from "./components/modals/WhatsNewModal";
 import { AppTourModal } from "./components/modals/AppTourModal";
 import { ChapLockModal } from "./components/modals/ChapLockModal";
 import { PopupBroadcastModal } from "./components/modals/PopupBroadcastModal";
+import { MarketplaceModal } from "./components/marketplace/MarketplaceModal";
 
 export function App() {
   const { session, isDemoMode, exitDemo } = useAuth();
@@ -47,6 +50,7 @@ export function App() {
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const [lockedChapToReopen, setLockedChapToReopen] = useState(null);
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
 
   // If no session & not in demo mode -> Show Auth screen
   if (!session && !isDemoMode) {
@@ -104,11 +108,11 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen pb-20 selection:bg-indigo-600 selection:text-white">
+    <div className="min-h-screen selection:bg-indigo-600 selection:text-white">
       {/* Demo Sticky Bar */}
       {isDemoMode && (
         <div className="sticky top-0 z-40 bg-amber-500 text-white px-4 py-2 shadow-md">
-          <div className="max-w-md mx-auto flex items-center justify-between gap-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
             <div className="text-xs font-extrabold truncate">
               👁️ DEMO MODE •{" "}
               <button onClick={() => setTourOpen(true)} className="underline">
@@ -133,8 +137,79 @@ export function App() {
         </div>
       )}
 
-      {/* Main Student Shell */}
-      <main className="max-w-md mx-auto px-3.5 pt-3.5">
+      {/* ============================================================ */}
+      {/* 1. DESKTOP / PC / LAPTOP VIEW (Screens >= 1024px)              */}
+      {/* ============================================================ */}
+      <div className="hidden lg:flex min-h-screen">
+        {/* Left Sticky Sidebar */}
+        <DesktopSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onOpenMarketplace={() => setMarketplaceOpen(true)}
+          onOpenQuickNotes={() => setQuickNotesOpen(true)}
+          onOpenExtraRev={() => setExtraRevOpen(true)}
+          onOpenBulkImport={() => setBulkImportOpen(true)}
+          onStartTour={() => setTourOpen(true)}
+          onOpenMultiExam={() => setMultiExamOpen(true)}
+        />
+
+        {/* Right Main Desktop Content Area */}
+        <main className="flex-1 min-w-0 p-6 xl:p-8 max-w-7xl mx-auto overflow-y-auto">
+          {/* Desktop Top Navigation Bar */}
+          <DesktopTopBar
+            activeTab={activeTab}
+            onOpenMarketplace={() => setMarketplaceOpen(true)}
+            onOpenQuickNotes={() => setQuickNotesOpen(true)}
+            onOpenMultiExam={() => setMultiExamOpen(true)}
+          />
+
+          {/* Countdown Clock (ONLY on Today Tab) */}
+          {activeTab === "today" && (
+            <div className="mb-4">
+              <DailyCountdown onOpenMultiExam={() => setMultiExamOpen(true)} />
+            </div>
+          )}
+
+          {/* Top 4 KPI Boxes - Wide 4-Column Desktop Grid */}
+          <div className="mb-6">
+            <KpiCards onKpiClick={handleKpiClick} />
+          </div>
+
+          {/* Tab Content Panes */}
+          <div className="space-y-6">
+            {activeTab === "today" && (
+              <TodayTab
+                onOpenExtraRev={() => setExtraRevOpen(true)}
+                onOpenQuickNotes={() => setQuickNotesOpen(true)}
+                onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
+                onNavigateToSyllabus={() => setActiveTab("syllabus")}
+              />
+            )}
+
+            {activeTab === "syllabus" && (
+              <SyllabusTab
+                onOpenBulkImport={() => setBulkImportOpen(true)}
+                onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
+                onOpenMarketplace={() => setMarketplaceOpen(true)}
+              />
+            )}
+
+            {activeTab === "tests" && <AnalysisTab />}
+
+            {activeTab === "profile" && (
+              <ProfileTab
+                onOpenMultiExam={() => setMultiExamOpen(true)}
+                onOpenBulkImport={() => setBulkImportOpen(true)}
+              />
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* ============================================================ */}
+      {/* 2. MOBILE & TABLET VIEW (Screens < 1024px)                     */}
+      {/* ============================================================ */}
+      <div className="block lg:hidden max-w-md mx-auto px-3.5 pt-3.5 pb-24">
         <Header onOpenDrawer={() => setDrawerOpen(true)} />
 
         {/* 1. Timer (Daily Countdown) - ONLY on Today ("આજે") page */}
@@ -142,10 +217,10 @@ export function App() {
           <DailyCountdown onOpenMultiExam={() => setMultiExamOpen(true)} />
         )}
 
-        {/* 2. Top 4 KPI Boxes - Visible on ALL pages ("આજે", "સિલેબસ", "એનાલિસિસ", "એકાઉન્ટ") */}
+        {/* 2. Top 4 KPI Boxes */}
         <KpiCards onKpiClick={handleKpiClick} />
 
-        {/* 3. Tab Contents */}
+        {/* 3. Mobile Tab Contents */}
         {activeTab === "today" && (
           <TodayTab
             onOpenExtraRev={() => setExtraRevOpen(true)}
@@ -159,6 +234,7 @@ export function App() {
           <SyllabusTab
             onOpenBulkImport={() => setBulkImportOpen(true)}
             onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
+            onOpenMarketplace={() => setMarketplaceOpen(true)}
           />
         )}
 
@@ -171,10 +247,18 @@ export function App() {
           />
         )}
 
+        {/* Mobile Sticky Bottom Nav Bar */}
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-      </main>
+      </div>
 
-      {/* Modals & Overlays */}
+      {/* ============================================================ */}
+      {/* Shared Modals & Overlays (Available on both Mobile & Desktop) */}
+      {/* ============================================================ */}
+      <MarketplaceModal
+        isOpen={marketplaceOpen}
+        onClose={() => setMarketplaceOpen(false)}
+      />
+
       <SideDrawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -184,6 +268,7 @@ export function App() {
         onOpenBulkImport={() => setBulkImportOpen(true)}
         onOpenWhatsNew={() => setWhatsNewOpen(true)}
         onStartTour={() => setTourOpen(true)}
+        onOpenMarketplace={() => setMarketplaceOpen(true)}
       />
 
       <MultiExamModal

@@ -12,6 +12,81 @@ import { fetchCloudDatabase, saveCloudDatabase } from "../services/firebase";
 
 const StudyContext = createContext();
 
+export const DEFAULT_MARKETPLACE_BOOKS = [
+  {
+    id: "book_cce_reasoning_top",
+    title: "🎯 CCE Group A & B Master Reasoning Topper Handwritten Notes",
+    authorAnon: "CCE 2024 Topper #14",
+    sellerMobile: "9876543210",
+    sellerName: "Topper Student",
+    sellerUpi: "cce.topper@upi",
+    exam: "CCE (Group A & B)",
+    subject: "Reasoning & Mental Ability",
+    type: "Handwritten Notes",
+    price: 49,
+    adminCommissionPct: 10,
+    adminFee: 5,
+    sellerPayout: 44,
+    totalPages: 140,
+    samplePagesCount: 6,
+    sampleDemoText: "✓ Syllogism 10-Second Short Tricks\n✓ Blood Relations Family Tree Formula\n✓ Seating Arrangement Matrix Methods\n✓ Coding-Decoding Direct Shortcuts\n✓ 50+ Solved CCE Previous Questions with Handwritten Explanations",
+    sampleDemoUrl: "https://drive.google.com",
+    fullDownloadUrl: "https://drive.google.com",
+    status: "Approved",
+    createdAt: "01 Nov, 10:00 am",
+    salesCount: 24,
+    rating: 4.9,
+  },
+  {
+    id: "book_guj_history_top",
+    title: "🏛️ ગુજરાતનો સંપૂર્ણ ઈતિહાસ & વારસો — Short Handwritten Capsule",
+    authorAnon: "GPSC Interviewee #31",
+    sellerMobile: "9876543211",
+    sellerName: "Topper Student 2",
+    sellerUpi: "gpsc.topper@upi",
+    exam: "GPSC Class 1-2",
+    subject: "ગુજરાતનો ઈતિહાસ & સંસ્કૃતિ",
+    type: "Handwritten Notes",
+    price: 59,
+    adminCommissionPct: 10,
+    adminFee: 6,
+    sellerPayout: 53,
+    totalPages: 185,
+    samplePagesCount: 8,
+    sampleDemoText: "✓ મૈત્રક, સોલંકી અને વાઘેલા કાળ ટાઈમલાઈન ચાર્ટ્સ\n✓ ગુજરાતના મહત્વના શિલાલેખ અને સ્થાપત્ય યાદ રાખવાની ટ્રીક્સ\n✓ આદિવાસી મેળાઓ, લોકનૃત્યો અને હસ્તકળા ક્વિક ટેબલ\n✓ GPSC Class 1-2 માટે અતિ-મહત્વના ૨૫૦+ પોઈન્ટર્સ",
+    sampleDemoUrl: "https://drive.google.com",
+    fullDownloadUrl: "https://drive.google.com",
+    status: "Approved",
+    createdAt: "02 Nov, 03:30 pm",
+    salesCount: 19,
+    rating: 5.0,
+  },
+  {
+    id: "book_const_polity_top",
+    title: "⚖️ ભારતનું બંધારણ (Constitution) 2026 Latest Amendment Notes",
+    authorAnon: "PSI Ranker #07",
+    sellerMobile: "9876543212",
+    sellerName: "Topper Student 3",
+    sellerUpi: "psi.ranker@upi",
+    exam: "Police PSI / Constable",
+    subject: "ભારતનું બંધારણ & રાજવ્યવસ્થા",
+    type: "Handwritten Notes",
+    price: 39,
+    adminCommissionPct: 10,
+    adminFee: 4,
+    sellerPayout: 35,
+    totalPages: 120,
+    samplePagesCount: 5,
+    sampleDemoText: "✓ મૂળભૂત અધિકારો (કલમ ૧૨ થી ૩૫) ફાસ્ટ રિવિઝન ટ્રીક\n✓ રાષ્ટ્રપતિ, રાજ્યપાલ અને ન્યાયતંત્ર તુલનાત્મક ચાર્ટ\n✓ ૧૦૬મો બંધારણીય સુધારો અને તાજેતરના સુપ્રીમ ચુકાદાઓ\n✓ PSI & Constable ખાસ ૫૦૦+ વન-લાઇનર્સ",
+    sampleDemoUrl: "https://drive.google.com",
+    fullDownloadUrl: "https://drive.google.com",
+    status: "Approved",
+    createdAt: "03 Nov, 11:15 am",
+    salesCount: 31,
+    rating: 4.8,
+  }
+];
+
 function loadLocalDB() {
   const keys = [DB_KEY, DB_MIRROR_KEY, "THE_TARGET_CLEAN_DB_V6", "THE_TARGET_CLEAN_DB_V5"];
   for (const k of keys) {
@@ -24,11 +99,23 @@ function loadLocalDB() {
         if (typeof parsed.broadcast !== "string") parsed.broadcast = "";
         if (!parsed.popupBroadcast) parsed.popupBroadcast = null;
         if (!parsed.users) parsed.users = {};
+        if (!Array.isArray(parsed.marketplaceBooks) || parsed.marketplaceBooks.length === 0) {
+          parsed.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
+        }
+        if (!Array.isArray(parsed.marketplaceOrders)) parsed.marketplaceOrders = [];
         return parsed;
       } catch (e) {}
     }
   }
-  return { users: {}, feedbacks: [], deletedData: [], broadcast: "", popupBroadcast: null };
+  return {
+    users: {},
+    feedbacks: [],
+    deletedData: [],
+    broadcast: "",
+    popupBroadcast: null,
+    marketplaceBooks: DEFAULT_MARKETPLACE_BOOKS,
+    marketplaceOrders: []
+  };
 }
 
 export function StudyProvider({ children }) {
@@ -85,6 +172,16 @@ export function StudyProvider({ children }) {
         if (typeof cloudData.broadcast === "string") merged.broadcast = cloudData.broadcast;
         if (Array.isArray(cloudData.deletedData)) merged.deletedData = cloudData.deletedData;
         merged.popupBroadcast = cloudData.popupBroadcast || null;
+        if (Array.isArray(cloudData.marketplaceBooks)) {
+          merged.marketplaceBooks = cloudData.marketplaceBooks;
+        } else if (!merged.marketplaceBooks || merged.marketplaceBooks.length === 0) {
+          merged.marketplaceBooks = DEFAULT_MARKETPLACE_BOOKS;
+        }
+        if (Array.isArray(cloudData.marketplaceOrders)) {
+          merged.marketplaceOrders = cloudData.marketplaceOrders;
+        } else if (!merged.marketplaceOrders) {
+          merged.marketplaceOrders = [];
+        }
 
         const str = JSON.stringify(merged);
         localStorage.setItem(DB_KEY, str);

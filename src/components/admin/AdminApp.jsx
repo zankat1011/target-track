@@ -274,6 +274,84 @@ export function AdminApp() {
     reader.readAsText(file);
   };
 
+  // Marketplace Admin Handlers
+  const marketplaceBooks = db.marketplaceBooks || [];
+  const marketplaceOrders = db.marketplaceOrders || [];
+
+  const handleApproveBook = (bookId) => {
+    const nextBooks = marketplaceBooks.map((b) =>
+      b.id === bookId ? { ...b, status: "Approved" } : b
+    );
+    commitDb({ ...db, marketplaceBooks: nextBooks });
+    triggerCelebration("✅ Book Approved!", "હવે માર્કેટપ્લેસમાં બધા વિદ્યાર્થીઓ જોઈ શકશે.");
+  };
+
+  const handleRejectBook = (bookId) => {
+    const reason = prompt(
+      "રિજેક્ટ કરવાનું કારણ લખો:",
+      "અધૂરી માહિતી અથવા સ્પષ્ટ સેમ્પલ પેજ નથી."
+    );
+    if (!reason) return;
+    const nextBooks = marketplaceBooks.map((b) =>
+      b.id === bookId ? { ...b, status: "Rejected", rejectReason: reason } : b
+    );
+    commitDb({ ...db, marketplaceBooks: nextBooks });
+    triggerCelebration("❌ Book Rejected", "સ્ટેટસ અપડેટ થઈ ગયું.");
+  };
+
+  const handleDeleteBook = (bookId) => {
+    if (!window.confirm("શું તમે આ બુક લિસ્ટિંગ સંપૂર્ણ કાઢી નાખવા માંગો છો?")) return;
+    const nextBooks = marketplaceBooks.filter((b) => b.id !== bookId);
+    commitDb({ ...db, marketplaceBooks: nextBooks });
+  };
+
+  const handleVerifyOrder = (orderId) => {
+    const order = marketplaceOrders.find((o) => o.id === orderId);
+    if (!order) return;
+
+    const nextOrders = marketplaceOrders.map((o) =>
+      o.id === orderId
+        ? { ...o, status: "Verified", verifiedAt: nowFormattedTimestamp() }
+        : o
+    );
+
+    // Update sales count on book
+    const nextBooks = marketplaceBooks.map((b) =>
+      b.id === order.bookId ? { ...b, salesCount: Number(b.salesCount || 0) + 1 } : b
+    );
+
+    // Send direct message to the buyer
+    const nextUsers = { ...db.users };
+    const buyer = nextUsers[order.buyerMobile];
+    if (buyer) {
+      if (!Array.isArray(buyer.directMessages)) buyer.directMessages = [];
+      buyer.directMessages.unshift({
+        id: `dm_${Date.now()}`,
+        date: nowFormattedTimestamp(),
+        text: `🎉 [Book Verified]\nતમારી બુક "${order.bookTitle}" નું પેમેન્ટ વેરિફાય થઈ ગયું છે!\nતમે માર્કેટપ્લેસ 'મારી હિસ્ટ્રી' માંથી ડાઉનલોડ કરી શકો છો.`,
+        seen: false,
+      });
+    }
+
+    commitDb({
+      ...db,
+      marketplaceOrders: nextOrders,
+      marketplaceBooks: nextBooks,
+      users: nextUsers,
+    });
+    triggerCelebration("✅ Payment Verified!", `${order.buyerName} ને એક્સેસ મળી ગયું છે.`);
+  };
+
+  const handleMarkPayoutDone = (orderId) => {
+    const nextOrders = marketplaceOrders.map((o) =>
+      o.id === orderId
+        ? { ...o, sellerPayoutStatus: "Paid", payoutPaidAt: nowFormattedTimestamp() }
+        : o
+    );
+    commitDb({ ...db, marketplaceOrders: nextOrders });
+    triggerCelebration("💸 Payout Marked Paid!", "Seller નું પેમેન્ટ ચૂકવાઈ ગયું.");
+  };
+
   // Filtered Users
   const filteredUsers = usersArr.filter((u) => {
     const q = searchQ.toLowerCase().trim();
@@ -325,10 +403,11 @@ export function AdminApp() {
       </header>
 
       {/* Admin Nav Tabs */}
-      <div className="grid grid-cols-4 gap-1.5 subtle-pill p-1">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 subtle-pill p-1">
         {[
           { id: "dashboard", label: "📊 Overview" },
           { id: "users", label: "👥 Users" },
+          { id: "marketplace", label: "📚 Book Bazaar" },
           { id: "tools", label: "📢 Broadcast" },
           { id: "feedback", label: "🛠️ Reports" },
         ].map((tab) => (
@@ -863,6 +942,255 @@ export function AdminApp() {
               </label>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ================= PAGE 5: BOOK BAZAAR MANAGEMENT ================= */}
+      {activePage === "marketplace" && (
+        <div className="space-y-4 anim-fade">
+          {/* Marketplace Stats */}
+          {(() => {
+            const pendingBooks = marketplaceBooks.filter((b) => b.status === "Pending");
+            const pendingOrders = marketplaceOrders.filter((o) => o.status === "Pending Verification");
+            const verifiedOrders = marketplaceOrders.filter((o) => o.status === "Verified");
+            const totalCommissionEarned = verifiedOrders.reduce((acc, o) => acc + (Number(o.adminFee) || 0), 0);
+            const totalVolume = verifiedOrders.reduce((acc, o) => acc + (Number(o.bookPrice) || 0), 0);
+
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="one-card p-3.5 space-y-1">
+                    <div className="text-[10px] font-bold muted-text">કુલ પુસ્તકો</div>
+                    <div className="text-xl font-extrabold">{marketplaceBooks.length}</div>
+                    <div className="text-[9px] text-amber-500 font-extrabold">{pendingBooks.length} રિવ્યૂ બાકી</div>
+                  </div>
+                  <div className="one-card p-3.5 space-y-1">
+                    <div className="text-[10px] font-bold muted-text">કુલ ઓર્ડર્સ</div>
+                    <div className="text-xl font-extrabold text-indigo-500">{marketplaceOrders.length}</div>
+                    <div className="text-[9px] text-indigo-500 font-extrabold">{pendingOrders.length} વેરિફાય બાકી</div>
+                  </div>
+                  <div className="one-card p-3.5 space-y-1">
+                    <div className="text-[10px] font-bold muted-text">માર્કેટપ્લેસ ટર્નઓવર</div>
+                    <div className="text-xl font-extrabold text-slate-800 dark:text-slate-200">₹{totalVolume}</div>
+                    <div className="text-[9px] text-emerald-500 font-extrabold">કુલ સેલ</div>
+                  </div>
+                  <div className="one-card p-3.5 space-y-1 border-l-4 border-l-emerald-500">
+                    <div className="text-[10px] font-bold text-emerald-500">એડમિન કમિશન (10%)</div>
+                    <div className="text-xl font-extrabold text-emerald-500">₹{totalCommissionEarned}</div>
+                    <div className="text-[9px] text-emerald-500 font-extrabold">ચોખ્ખો નફો</div>
+                  </div>
+                </div>
+
+                {/* SECTION 1: PENDING ORDERS / UTR VERIFICATION */}
+                <div className="one-card p-4 space-y-3 border-l-4 border-l-indigo-600">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-extrabold">💳 ખરીદી પેમેન્ટ ચકાસણી (Orders)</span>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-500">
+                        {pendingOrders.length} બાકી
+                      </span>
+                    </div>
+                  </div>
+
+                  {marketplaceOrders.length === 0 ? (
+                    <div className="text-xs muted-text text-center py-4">હજુ કોઈ ઓર્ડર આવ્યા નથી.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {marketplaceOrders.map((ord) => {
+                        const isVerified = ord.status === "Verified";
+                        const isPayoutDone = ord.sellerPayoutStatus === "Paid";
+
+                        return (
+                          <div
+                            key={ord.id}
+                            className={`subtle-pill p-3.5 space-y-2 text-xs border-l-4 ${
+                              isVerified ? "border-l-emerald-500" : "border-l-amber-500"
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                              <div>
+                                <span className="font-extrabold text-sm">{ord.bookTitle}</span>
+                                <div className="text-[10px] muted-text font-bold mt-0.5">
+                                  Invoice: {ord.invoiceNo} • {ord.createdAt}
+                                </div>
+                              </div>
+                              <span
+                                className={`text-[10px] font-black px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
+                                  isVerified ? "bg-emerald-500/15 text-emerald-500" : "bg-amber-500/15 text-amber-500"
+                                }`}
+                              >
+                                {isVerified ? "✓ Verified & Active" : "⏳ Review Pending"}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1 border-t" style={{ borderColor: "var(--border-col)" }}>
+                              <div>
+                                <span className="muted-text">ખરીદનાર વિદ્યાર્થી: </span>
+                                <b className="text-slate-800 dark:text-slate-200">{ord.buyerName}</b> ({ord.buyerMobile})
+                                <div className="mt-0.5 font-mono text-indigo-500 font-extrabold">UTR: {ord.buyerUtr}</div>
+                              </div>
+                              <div>
+                                <span className="muted-text">રકમ બ્રેકડાઉન: </span>
+                                <b>₹{ord.bookPrice}</b>
+                                <span className="text-emerald-500 font-extrabold block">
+                                  એડમિન ફી (10%): ₹{ord.adminFee} | Seller Payout: ₹{ord.sellerPayout}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Seller Payout Box */}
+                            <div className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                              <div>
+                                <span className="muted-text">Seller UPI: </span>
+                                <span className="font-mono font-black text-indigo-500 select-all">{ord.sellerUpi}</span>
+                                <span className="text-[10px] muted-text ml-1">({ord.sellerMobile})</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {!isVerified ? (
+                                  <button
+                                    onClick={() => handleVerifyOrder(ord.id)}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-1.5 rounded-xl text-xs shadow-sm transition"
+                                  >
+                                    ✓ Verify & Unlock PDF
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleMarkPayoutDone(ord.id)}
+                                    disabled={isPayoutDone}
+                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black shadow-sm transition ${
+                                      isPayoutDone
+                                        ? "bg-slate-400 text-white cursor-not-allowed"
+                                        : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                    }`}
+                                  >
+                                    {isPayoutDone ? "✓ Seller Paid" : `💸 Pay Seller ₹${ord.sellerPayout}`}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 2: PENDING BOOK APPROVALS */}
+                <div className="one-card p-4 space-y-3 border-l-4 border-l-amber-500">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-extrabold">📋 પુસ્તક લિસ્ટિંગ મંજૂરી (Approvals)</span>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500">
+                        {pendingBooks.length} મંજૂરી બાકી
+                      </span>
+                    </div>
+                  </div>
+
+                  {pendingBooks.length === 0 ? (
+                    <div className="text-xs muted-text text-center py-4">કોઈ નવી બુક રિવ્યૂ માટે બાકી નથી.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingBooks.map((b) => (
+                        <div key={b.id} className="subtle-pill p-4 space-y-2.5 text-xs border-2 border-amber-500/40">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <div>
+                              <h4 className="font-black text-sm">{b.title}</h4>
+                              <div className="text-[10px] muted-text font-bold">
+                                {b.exam} • {b.subject} • {b.type} • {b.totalPages} પેજ
+                              </div>
+                            </div>
+                            <span className="text-base font-black text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-xl self-start sm:self-auto">
+                              ₹{b.price} <span className="text-[10px] font-normal text-muted-text">(તમારું કમિશન: ₹{b.adminFee || Math.round(b.price * 0.1)})</span>
+                            </span>
+                          </div>
+
+                          <div className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 space-y-1 text-[11px]">
+                            <div className="font-extrabold text-slate-700 dark:text-slate-300">ડેમો સેમ્પલ પેજ વિગત:</div>
+                            <div className="whitespace-pre-wrap muted-text leading-relaxed">{b.sampleDemoText || "કોઈ વિગત નથી"}</div>
+                            {b.sampleDemoUrl && (
+                              <a href={b.sampleDemoUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-500 underline font-bold block pt-1">
+                                🔗 ડેમો પ્રિવ્યૂ લિંક ખોલો
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: "var(--border-col)" }}>
+                            <div className="text-[10px] muted-text">
+                              Seller: <b>{b.sellerName}</b> ({b.sellerMobile}) • UPI: <b className="font-mono text-indigo-500">{b.sellerUpi}</b>
+                              <a href={b.fullDownloadUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-500 underline font-bold ml-2">
+                                📥 સંપૂર્ણ PDF ચકાસો
+                              </a>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleApproveBook(b.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-1.5 rounded-xl text-xs shadow-sm transition"
+                              >
+                                ✅ Approve & Go Live
+                              </button>
+                              <button
+                                onClick={() => handleRejectBook(b.id)}
+                                className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-500 border border-rose-500/30 font-bold px-3 py-1.5 rounded-xl text-xs transition"
+                              >
+                                ❌ Reject
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBook(b.id)}
+                                className="text-slate-400 hover:text-rose-500 p-1.5 text-xs transition"
+                                title="Delete"
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 3: ALL LIVE BOOKS */}
+                <div className="one-card p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-extrabold">🟢 લાઈવ પુસ્તકો & નોટ્સ ({marketplaceBooks.filter(b => b.status === "Approved").length})</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {marketplaceBooks
+                      .filter((b) => b.status === "Approved")
+                      .map((b) => (
+                        <div key={b.id} className="subtle-pill p-3 flex items-center justify-between gap-2 text-xs">
+                          <div>
+                            <span className="font-extrabold">{b.title}</span>
+                            <div className="text-[10px] muted-text font-bold">
+                              ₹{b.price} • {b.exam} • વેચાણ: {b.salesCount || 0} વખત
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={b.fullDownloadUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] font-black text-indigo-500 underline"
+                            >
+                              PDF Link
+                            </a>
+                            <button
+                              onClick={() => handleDeleteBook(b.id)}
+                              className="text-rose-500 hover:text-rose-700 p-1 text-xs"
+                              title="Delete Listing"
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
