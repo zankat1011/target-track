@@ -14,8 +14,18 @@ export function AdminApp() {
   const { toggleTheme } = useTheme();
   const { db, commitDb, syncWithCloud, cloudStatus, triggerCelebration } = useStudy();
 
-  const [activePage, setActivePage] = useState("dashboard"); // 'dashboard' | 'users' | 'marketplace' | 'tools' | 'feedback'
-  const [adminBazaarTab, setAdminBazaarTab] = useState("orders"); // 'orders' | 'payouts' | 'books' | 'vip' | 'reviews'
+  const [activePage, setActivePage] = useState("dashboard"); // 'dashboard' | 'users' | 'marketplace' | 'financials' | 'tools' | 'feedback'
+  const [adminBazaarTab, setAdminBazaarTab] = useState("orders"); // 'orders' | 'payouts' | 'sellers' | 'books' | 'vip' | 'reviews'
+  const [reportFilterTab, setReportFilterTab] = useState("pending"); // 'pending' | 'working' | 'resolved'
+  const [finDateRange, setFinDateRange] = useState("all"); // 'today' | 'yesterday' | 'week' | 'month' | 'all' | 'custom'
+  const [finFromDate, setFinFromDate] = useState("");
+  const [finToDate, setFinToDate] = useState("");
+
+  // 2-Step Verified Order Delete states (Requirement 6)
+  const [adminOrderToDelete, setAdminOrderToDelete] = useState(null);
+  const [adminDeleteStep, setAdminDeleteStep] = useState(1);
+  const [adminDeleteVerifyText, setAdminDeleteVerifyText] = useState("");
+
   const [userDataView, setUserDataView] = useState("active"); // 'active' | 'deleted'
   const [searchQ, setSearchQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -280,6 +290,7 @@ export function AdminApp() {
   const marketplaceOrders = db.marketplaceOrders || [];
   const marketplacePayouts = db.marketplacePayouts || [];
   const marketplaceSubscriptions = db.marketplaceSubscriptions || [];
+  const sellerApplications = db.sellerApplications || [];
 
   const handleApproveBook = (bookId) => {
     const nextBooks = marketplaceBooks.map((b) =>
@@ -473,6 +484,61 @@ export function AdminApp() {
     });
     commitDb({ ...db, marketplaceBooks: nextBooks });
     triggerCelebration("🗑️ રિવ્યૂ ડિલીટ થયો", "રેટિંગ સફળતાપૂર્વક હટાવી દીધું.");
+  };
+
+  // Seller Application Approvals (Requirement 2)
+  const handleApproveSeller = (appId) => {
+    const target = sellerApplications.find((a) => a.id === appId);
+    if (!target) return;
+
+    const nextApps = sellerApplications.map((a) =>
+      a.id === appId
+        ? { ...a, status: "Approved", approvedAt: nowFormattedTimestamp() }
+        : a
+    );
+
+    // Send direct notification message to the student
+    const nextUsers = { ...db.users };
+    const applicant = nextUsers[target.applicantMobile];
+    if (applicant) {
+      if (!Array.isArray(applicant.directMessages)) applicant.directMessages = [];
+      applicant.directMessages.unshift({
+        id: `dm_${Date.now()}`,
+        date: nowFormattedTimestamp(),
+        text: `🎉 [સેલર એકાઉન્ટ મંજૂર]\nતમારી સેલર વેરિફિકેશન અરજી મંજૂર કરવામાં આવી છે!\nહવે તમે Target Book Bazaar માં તમારી નોટ્સ અને બુક્સ લિસ્ટ કરીને સીધી તમારા વૉલેટમાં કમાણી કરી શકો છો.`,
+        seen: false,
+      });
+    }
+
+    commitDb({ ...db, sellerApplications: nextApps, users: nextUsers });
+    triggerCelebration("✅ સેલર મંજૂર થયો!", `${target.applicantName} (${target.applicantMobile})`);
+  };
+
+  const handleRejectSeller = (appId) => {
+    const reason = prompt("રિજેક્ટ કરવાનું કારણ લખો:", "અધૂરી વિગતો અથવા અયોગ્ય સેમ્પલ.");
+    if (!reason) return;
+
+    const nextApps = sellerApplications.map((a) =>
+      a.id === appId
+        ? { ...a, status: "Rejected", rejectedAt: nowFormattedTimestamp(), rejectReason: reason }
+        : a
+    );
+    commitDb({ ...db, sellerApplications: nextApps });
+    triggerCelebration("❌ સેલર અરજી અસ્વીકાર", "સ્ટેટસ અપડેટ થઈ ગયું.");
+  };
+
+  // 2-Step Verified Order Deletion on Admin side (Requirement 6)
+  const handleAdminConfirmDeleteOrder = () => {
+    if (!adminOrderToDelete) return;
+    if (adminDeleteVerifyText.trim().toUpperCase() !== "DELETE") {
+      return alert("પુષ્ટિ કરવા માટે ખાનામાં બરાબર 'DELETE' લખો.");
+    }
+    const nextOrders = marketplaceOrders.filter((o) => o.id !== adminOrderToDelete.id);
+    commitDb({ ...db, marketplaceOrders: nextOrders });
+    setAdminOrderToDelete(null);
+    setAdminDeleteStep(1);
+    setAdminDeleteVerifyText("");
+    triggerCelebration("🗑️ ઓર્ડર ડિલીટ થયો", "ઓર્ડર રેકોર્ડ કાયમ માટે હટાવી દીધો.");
   };
 
   // Filtered Users
