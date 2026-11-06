@@ -7,7 +7,6 @@ import { openAdminWhatsApp, getValidityRemainingDays } from "../../utils/helpers
 export function DesktopSidebar({
   activeTab,
   onTabChange,
-  onOpenMarketplace,
   onOpenQuickNotes,
   onOpenExtraRev,
   onOpenBulkImport,
@@ -24,6 +23,7 @@ export function DesktopSidebar({
   const navItems = [
     { id: "today", label: "આજે (Today)", icon: "🏠", desc: "Daily Logger & Habits" },
     { id: "syllabus", label: "સિલેબસ (Syllabus)", icon: "📚", desc: "Subjects & Vault" },
+    { id: "marketplace", label: "બુક બજાર (Bazaar)", icon: "📖", desc: "Buy & Sell Notes", isNew: true },
     { id: "tests", label: "એનાલિસિસ (Analytics)", icon: "📊", desc: "Tests & Psychology" },
     { id: "profile", label: "એકાઉન્ટ (Profile)", icon: "👤", desc: "Focus Timer & Backup" },
   ];
@@ -74,7 +74,7 @@ export function DesktopSidebar({
         </div>
 
         {/* Main Navigation Menu */}
-        <nav className="space-y-1">
+        <nav className="space-y-1.5">
           <div className="text-[10px] font-extrabold uppercase muted-text px-2 py-1">મુખ્ય મેનૂ</div>
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
@@ -85,6 +85,8 @@ export function DesktopSidebar({
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-extrabold transition text-left group ${
                   isActive
                     ? "bg-indigo-600 text-white shadow-sm"
+                    : item.isNew
+                    ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                     : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                 }`}
               >
@@ -92,25 +94,15 @@ export function DesktopSidebar({
                 <div className="flex-1 min-w-0">
                   <div className="truncate">{item.label}</div>
                 </div>
+                {item.isNew && !isActive && (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500 text-white shrink-0">
+                    NEW
+                  </span>
+                )}
                 {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0"></span>}
               </button>
             );
           })}
-
-          {/* Dedicated Marketplace Menu Item */}
-          <button
-            onClick={onOpenMarketplace}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-extrabold transition text-left bg-gradient-to-r from-emerald-500/15 to-indigo-500/15 border border-emerald-500/30 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 group shadow-xs mt-2"
-          >
-            <span className="text-base">📖</span>
-            <div className="flex-1 min-w-0">
-              <div className="truncate">બુક બજાર (Marketplace)</div>
-              <div className="text-[9px] text-slate-500 dark:text-slate-400 font-normal">ખરીદો અને વેચો (90% Payout)</div>
-            </div>
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500 text-white shrink-0">
-              NEW
-            </span>
-          </button>
         </nav>
 
         {/* Quick Tools Section */}

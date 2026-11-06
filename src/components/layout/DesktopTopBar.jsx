@@ -1,13 +1,13 @@
 import React from "react";
 import { useStudy } from "../../context/StudyContext";
-import { todayISO } from "../../utils/helpers";
 
-export function DesktopTopBar({ activeTab, onOpenMarketplace, onOpenQuickNotes, onOpenMultiExam }) {
-  const { currentUser, db } = useStudy();
+export function DesktopTopBar({ activeTab, onTabChange, onOpenQuickNotes, onOpenMultiExam }) {
+  const { currentUser } = useStudy();
 
   const titleMap = {
     today: { title: "આજનો દૈનિક અભ્યાસ (Today's Dashboard)", subtitle: "વાંચન લૉગ કરો, રિવિઝન સાયકલ પૂર્ણ કરો અને ડેઈલી સ્ટ્રીક જાળવો." },
     syllabus: { title: "સંપૂર્ણ અભ્યાસક્રમ (Syllabus & Chapters)", subtitle: "બધા વિષયોના ચેપ્ટર, પેજ અને પૂર્ણ થયેલા ચેપ્ટરનું વોલ્ટ." },
+    marketplace: { title: "ટાર્ગેટ બુક & નોટ્સ બજાર (Notes Marketplace)", subtitle: "ટોપર્સની હેન્ડરાઈટિંગ નોટ્સ ખરીદો અથવા તમારી નોટ્સ વેચીને ૯૦% ચોખ્ખી કમાણી કરો." },
     tests: { title: "સ્માર્ટ એનાલિસિસ & ટેસ્ટ રેકોર્ડ (Analytics)", subtitle: "ટોપર માઇન્ડસેટ સાયકોલોજી, ૭-દિવસીય સાતત્ય અને ટેસ્ટ એવરેજ." },
     profile: { title: "પ્રોફાઈલ, ટાઈમર & ડેટા સેટિંગ્સ (Account)", subtitle: "સ્માર્ટ ફોકસ ટાઈમર, ડેટા બેકઅપ અને સુરક્ષિત મેનેજમેન્ટ." },
   };
@@ -48,8 +48,12 @@ export function DesktopTopBar({ activeTab, onOpenMarketplace, onOpenQuickNotes, 
 
         {/* Book Bazaar Shortcut */}
         <button
-          onClick={onOpenMarketplace}
-          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3.5 py-1.5 rounded-2xl text-xs font-black shadow-sm transition flex items-center gap-1.5"
+          onClick={() => onTabChange("marketplace")}
+          className={`px-3.5 py-1.5 rounded-2xl text-xs font-black shadow-sm transition flex items-center gap-1.5 ${
+            activeTab === "marketplace"
+              ? "bg-indigo-600 text-white"
+              : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
+          }`}
         >
           <span>📖</span>
           <span>બુક બજાર</span>

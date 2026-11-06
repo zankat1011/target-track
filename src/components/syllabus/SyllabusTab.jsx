@@ -288,7 +288,7 @@ export function SyllabusTab({ onOpenBulkImport, onOpenChapLock, onOpenMarketplac
     <div id="tab-syllabus" className="space-y-3.5 anim-fade">
       {/* 📚 BOOK & NOTES BAZAAR BANNER (NEW) */}
       <div
-        onClick={onOpenMarketplace}
+        onClick={() => onOpenMarketplace?.()}
         className="one-card p-4 bg-gradient-to-r from-emerald-500/15 via-indigo-500/10 to-teal-500/15 border-2 border-emerald-500/40 hover:border-emerald-500 cursor-pointer shadow-md transition group"
       >
         <div className="flex items-center justify-between gap-3">
@@ -313,9 +313,13 @@ export function SyllabusTab({ onOpenBulkImport, onOpenChapLock, onOpenMarketplac
 
           <button
             type="button"
-            className="hidden sm:flex bg-emerald-600 hover:bg-emerald-700 text-white font-black px-4 py-2 rounded-xl text-xs shadow-sm shrink-0 items-center gap-1 group-hover:translate-x-1 transition"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMarketplace?.();
+            }}
+            className="flex bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-2 rounded-xl text-xs shadow-sm shrink-0 items-center gap-1 group-hover:translate-x-1 transition"
           >
-            <span>ઓપન કરો</span>
+            <span>ખોલો</span>
             <span>➔</span>
           </button>
         </div>

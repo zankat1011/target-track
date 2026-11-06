@@ -34,6 +34,7 @@ import { AppTourModal } from "./components/modals/AppTourModal";
 import { ChapLockModal } from "./components/modals/ChapLockModal";
 import { PopupBroadcastModal } from "./components/modals/PopupBroadcastModal";
 import { MarketplaceModal } from "./components/marketplace/MarketplaceModal";
+import { MarketplaceTab } from "./components/marketplace/MarketplaceTab";
 
 export function App() {
   const { session, isDemoMode, exitDemo } = useAuth();
@@ -145,7 +146,7 @@ export function App() {
         <DesktopSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          onOpenMarketplace={() => setMarketplaceOpen(true)}
+          onOpenMarketplace={() => setActiveTab("marketplace")}
           onOpenQuickNotes={() => setQuickNotesOpen(true)}
           onOpenExtraRev={() => setExtraRevOpen(true)}
           onOpenBulkImport={() => setBulkImportOpen(true)}
@@ -158,7 +159,8 @@ export function App() {
           {/* Desktop Top Navigation Bar */}
           <DesktopTopBar
             activeTab={activeTab}
-            onOpenMarketplace={() => setMarketplaceOpen(true)}
+            onTabChange={setActiveTab}
+            onOpenMarketplace={() => setActiveTab("marketplace")}
             onOpenQuickNotes={() => setQuickNotesOpen(true)}
             onOpenMultiExam={() => setMultiExamOpen(true)}
           />
@@ -170,10 +172,12 @@ export function App() {
             </div>
           )}
 
-          {/* Top 4 KPI Boxes - Wide 4-Column Desktop Grid */}
-          <div className="mb-6">
-            <KpiCards onKpiClick={handleKpiClick} />
-          </div>
+          {/* Top 4 KPI Boxes - Wide 4-Column Desktop Grid (Only on Today & Syllabus tabs) */}
+          {activeTab !== "marketplace" && (
+            <div className="mb-6">
+              <KpiCards onKpiClick={handleKpiClick} />
+            </div>
+          )}
 
           {/* Tab Content Panes */}
           <div className="space-y-6">
@@ -190,8 +194,12 @@ export function App() {
               <SyllabusTab
                 onOpenBulkImport={() => setBulkImportOpen(true)}
                 onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
-                onOpenMarketplace={() => setMarketplaceOpen(true)}
+                onOpenMarketplace={() => setActiveTab("marketplace")}
               />
+            )}
+
+            {activeTab === "marketplace" && (
+              <MarketplaceTab onBackToSyllabus={() => setActiveTab("syllabus")} />
             )}
 
             {activeTab === "tests" && <AnalysisTab />}
@@ -217,8 +225,10 @@ export function App() {
           <DailyCountdown onOpenMultiExam={() => setMultiExamOpen(true)} />
         )}
 
-        {/* 2. Top 4 KPI Boxes */}
-        <KpiCards onKpiClick={handleKpiClick} />
+        {/* 2. Top 4 KPI Boxes (Hidden on marketplace for clean reading experience) */}
+        {activeTab !== "marketplace" && (
+          <KpiCards onKpiClick={handleKpiClick} />
+        )}
 
         {/* 3. Mobile Tab Contents */}
         {activeTab === "today" && (
@@ -234,8 +244,12 @@ export function App() {
           <SyllabusTab
             onOpenBulkImport={() => setBulkImportOpen(true)}
             onOpenChapLock={(chap) => setLockedChapToReopen(chap)}
-            onOpenMarketplace={() => setMarketplaceOpen(true)}
+            onOpenMarketplace={() => setActiveTab("marketplace")}
           />
+        )}
+
+        {activeTab === "marketplace" && (
+          <MarketplaceTab onBackToSyllabus={() => setActiveTab("syllabus")} />
         )}
 
         {activeTab === "tests" && <AnalysisTab />}
@@ -268,7 +282,10 @@ export function App() {
         onOpenBulkImport={() => setBulkImportOpen(true)}
         onOpenWhatsNew={() => setWhatsNewOpen(true)}
         onStartTour={() => setTourOpen(true)}
-        onOpenMarketplace={() => setMarketplaceOpen(true)}
+        onOpenMarketplace={() => {
+          setDrawerOpen(false);
+          setActiveTab("marketplace");
+        }}
       />
 
       <MultiExamModal

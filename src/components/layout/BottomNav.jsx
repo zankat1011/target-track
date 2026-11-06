@@ -4,6 +4,7 @@ export function BottomNav({ activeTab, onTabChange }) {
   const tabs = [
     { id: "today", label: "આજે", icon: "🏠" },
     { id: "syllabus", label: "સિલેબસ", icon: "📚" },
+    { id: "marketplace", label: "બુક બજાર", icon: "📖" },
     { id: "tests", label: "એનાલિસિસ", icon: "📊" },
     { id: "profile", label: "એકાઉન્ટ", icon: "👤" },
   ];
@@ -16,7 +17,7 @@ export function BottomNav({ activeTab, onTabChange }) {
         borderColor: "var(--border-col)",
       }}
     >
-      <div className="max-w-md mx-auto grid grid-cols-4 py-2 px-3">
+      <div className="max-w-md mx-auto grid grid-cols-5 py-2 px-1">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -28,7 +29,7 @@ export function BottomNav({ activeTab, onTabChange }) {
               }`}
             >
               <span className="text-base">{tab.icon}</span>
-              <span className="text-[10px] font-extrabold mt-0.5">{tab.label}</span>
+              <span className="text-[9px] sm:text-[10px] font-extrabold mt-0.5 truncate px-0.5">{tab.label}</span>
             </button>
           );
         })}
